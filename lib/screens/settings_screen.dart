@@ -92,11 +92,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: SwitchListTile(
               secondary: Icon(Icons.smart_toy_outlined, color: themeProvider.getColor('primary')),
               title: Text('AI Business Bot', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: themeProvider.getColor('text'))),
-              subtitle: Text('Auto-reply to customers when away', style: TextStyle(color: themeProvider.getColor('textSecondary'), fontSize: 13)),
+              subtitle: Text(themeProvider.isBusinessBotEnabled ? 'Titan AI is handling your away messages' : 'Auto-reply to customers when away', style: TextStyle(color: themeProvider.getColor('textSecondary'), fontSize: 13)),
               value: themeProvider.isBusinessBotEnabled,
               activeColor: themeProvider.getColor('primary'),
               onChanged: (value) {
                 themeProvider.toggleBusinessBot(value);
+                if (value) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('🤖 Titan Business Bot Activated')));
+                }
               },
             ),
           ),
@@ -142,14 +145,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _buildSettingsItem(themeProvider, Icons.payments_outlined, Colors.blueAccent, 'Payments', 'Wallet, airtime, history', () {
                   Navigator.push(context, MaterialPageRoute(builder: (context) => WalletScreen()));
                 }),
-                Divider(indent: 56, height: 1, color: themeProvider.getColor('divider')),
-                _buildSettingsItem(themeProvider, Icons.storefront_outlined, Colors.deepOrange, 'Marketplace', 'Buy and sell items', () {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => MarketplaceScreen()));
-                }),
-                Divider(indent: 56, height: 1, color: themeProvider.getColor('divider')),
-                _buildSettingsItem(themeProvider, Icons.business_center_outlined, Colors.brown, 'Business Tools', 'Catalog, invoices, profiling', () {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => CatalogScreen()));
-                }),
               ],
             ),
           ),
@@ -170,10 +165,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Divider(indent: 56, height: 1, color: themeProvider.getColor('divider')),
                 _buildSettingsItem(themeProvider, Icons.palette_outlined, Colors.purple, 'Appearance', 'Themes, fonts, backgrounds', () {
                   Navigator.push(context, MaterialPageRoute(builder: (context) => AppearanceScreen()));
-                }),
-                Divider(indent: 56, height: 1, color: themeProvider.getColor('divider')),
-                _buildSettingsItem(themeProvider, Icons.forum_outlined, Colors.teal, 'Discussion Rooms', 'Temporary chat rooms (24h)', () {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => DiscussionRoomsScreen()));
                 }),
               ],
             ),

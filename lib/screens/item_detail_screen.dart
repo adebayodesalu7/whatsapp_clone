@@ -1,12 +1,18 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:whatsapp_clone/models/models.dart';
 import 'package:whatsapp_clone/screens/chat_screen.dart';
+import 'package:whatsapp_clone/screens/add_item_screen.dart';
 import 'package:whatsapp_clone/services/chat_service.dart';
 import 'package:whatsapp_clone/services/escrow_service.dart';
 import 'package:provider/provider.dart';
 import 'package:whatsapp_clone/providers/screen_theme_provider.dart';
+import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:whatsapp_clone/services/cloudinary_service.dart';
 
 class ItemDetailScreen extends StatelessWidget {
   final MarketplaceItem item;
@@ -26,6 +32,7 @@ class ItemDetailScreen extends StatelessWidget {
     final secondaryTextColor = themeProvider.getColor('textSecondary');
     final primaryColor = themeProvider.getColor('primary');
 
+    final currencyFormat = NumberFormat.currency(symbol: 'N', decimalDigits: 0);
     return Scaffold(
       backgroundColor: scaffoldColor,
       appBar: AppBar(
@@ -34,6 +41,21 @@ class ItemDetailScreen extends StatelessWidget {
         foregroundColor: themeProvider.getColor('appBarText'),
         elevation: 0,
         actions: [
+          if (currentUser != null && currentUser.uid == item.sellerId) ...[
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => AddItemScreen(editItem: item)),
+                );
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.red),
+              onPressed: () => _confirmDelete(context, item.id),
+            ),
+          ],
           IconButton(
             icon: const Icon(Icons.share_outlined),
             onPressed: () {
@@ -100,7 +122,7 @@ class ItemDetailScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          '₦${item.price.toStringAsFixed(0)}',
+                          currencyFormat.format(item.price),
                           style: TextStyle(fontSize: 26, color: primaryColor, fontWeight: FontWeight.w900),
                         ),
                         const Divider(height: 32),
@@ -140,6 +162,32 @@ class ItemDetailScreen extends StatelessWidget {
                       style: TextStyle(fontSize: 15, color: textColor.withOpacity(0.8), height: 1.6),
                     ),
                   ),
+
+                  if (item.aiTags.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    _buildSection(
+                      title: 'AI Smart Tags',
+                      cardColor: cardColor,
+                      secondaryTextColor: secondaryTextColor,
+                      textColor: textColor,
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: item.aiTags.map((tag) => Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.blue.withOpacity(0.2)),
+                          ),
+                          child: Text(
+                            '#$tag',
+                            style: const TextStyle(color: Colors.blue, fontSize: 11, fontWeight: FontWeight.bold),
+                          ),
+                        )).toList(),
+                      ),
+                    ),
+                  ],
 
                   if ((item.brand?.isNotEmpty ?? false) || (item.model?.isNotEmpty ?? false) || (item.specs != null && item.specs!.isNotEmpty)) ...[
                     const SizedBox(height: 16),
@@ -246,6 +294,32 @@ class ItemDetailScreen extends StatelessWidget {
                       ),
                     ),
                   ],
+
+                  const SizedBox(height: 12),
+                  
+                  if (item.imagePublicId != null && item.imagePublicId!.isNotEmpty)
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        final cloudinary = CloudinaryService();
+                        final videoUrl = cloudinary.getImageToVideoUrl(item.imagePublicId!);
+                        if (await canLaunchUrl(Uri.parse(videoUrl))) {
+                          await launchUrl(Uri.parse(videoUrl), mode: LaunchMode.externalApplication);
+                        } else {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not play video. Try again in a moment.')));
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.movie_creation_outlined),
+                      label: const Text('View AI Video Preview', style: TextStyle(fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple.shade700,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(double.infinity, 56),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 0,
+                      ),
+                    ),
 
                   const SizedBox(height: 12),
                   
@@ -397,6 +471,43 @@ class ItemDetailScreen extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context, String itemId) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Item?'),
+        content: const Text('Are you sure you want to remove this listing? This action cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context); // Close dialog
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => const Center(child: CircularProgressIndicator()),
+              );
+              try {
+                await FirebaseFirestore.instance.collection('marketplace_items').doc(itemId).delete();
+                if (context.mounted) {
+                  Navigator.pop(context); // Close progress
+                  Navigator.pop(context); // Go back to marketplace
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Item deleted successfully')));
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  Navigator.pop(context); // Close progress
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+                }
+              }
+            },
+            child: const Text('DELETE', style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
     );
   }

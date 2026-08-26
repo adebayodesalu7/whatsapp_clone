@@ -137,8 +137,10 @@ class MarketplaceItem {
   final double? lat;
   final double? lng;
   final String imageUrl;
+  final String? imagePublicId;
   final List<String> moreImages;
   final String? videoUrl;
+  final List<String> aiTags;
   final DateTime createdAt;
   // Car specific
   final String? brand;
@@ -159,8 +161,10 @@ class MarketplaceItem {
     this.lat,
     this.lng,
     required this.imageUrl,
+    this.imagePublicId,
     this.moreImages = const [],
     this.videoUrl,
+    this.aiTags = const [],
     required this.createdAt,
     this.brand,
     this.model,
@@ -182,8 +186,10 @@ class MarketplaceItem {
       lat: map['lat'] != null ? double.tryParse(map['lat'].toString()) : null,
       lng: map['lng'] != null ? double.tryParse(map['lng'].toString()) : null,
       imageUrl: map['imageUrl'] ?? '',
+      imagePublicId: map['imagePublicId'],
       moreImages: List<String>.from(map['moreImages'] ?? []),
       videoUrl: map['videoUrl'],
+      aiTags: List<String>.from(map['aiTags'] ?? []),
       createdAt: (map['createdAt'] as dynamic)?.toDate() ?? DateTime.now(),
       brand: map['brand'],
       model: map['model'],
@@ -205,6 +211,7 @@ class MarketplaceItem {
       'lat': lat,
       'lng': lng,
       'imageUrl': imageUrl,
+      'imagePublicId': imagePublicId,
       'moreImages': moreImages,
       'videoUrl': videoUrl,
       'createdAt': FieldValue.serverTimestamp(),

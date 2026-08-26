@@ -1,3 +1,4 @@
+import 'dart:io' as io;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
@@ -6,9 +7,27 @@ import 'package:whatsapp_clone/providers/screen_theme_provider.dart';
 import 'package:whatsapp_clone/screens/add_item_screen.dart';
 import 'package:whatsapp_clone/screens/item_detail_screen.dart';
 import 'package:whatsapp_clone/screens/business_tools_screen.dart';
-import 'package:whatsapp_clone/screens/ai_concierge_screen.dart';
-import 'package:whatsapp_clone/screens/wallet_screen.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
+
+class CurrencyInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    if (newValue.text.isEmpty) return newValue;
+    try {
+      double value = double.parse(newValue.text.replaceAll(RegExp(r'[^0-9]'), ''));
+      final formatter = NumberFormat.currency(symbol: 'N', decimalDigits: 0);
+      String newText = formatter.format(value);
+      return newValue.copyWith(
+        text: newText,
+        selection: TextSelection.collapsed(offset: newText.length),
+      );
+    } catch (e) {
+      return newValue;
+    }
+  }
+}
 
 class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({super.key});
@@ -36,14 +55,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     'Sokoto', 'Taraba', 'Yobe', 'Zamfara', 'FCT'
   ];
 
-  Future<void> _getCurrentLocation() async {
-    final position = await Geolocator.getCurrentPosition();
-    setState(() {
-      _currentPosition = position;
-      _showNearbyOnly = !_showNearbyOnly;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ScreenThemeProvider>(context);
@@ -64,14 +75,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           IconButton(
             icon: const Icon(Icons.business_center_outlined, size: 18), 
             onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => BusinessToolsScreen()));
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const BusinessToolsScreen()));
             },
           ),
         ],
       ),
       body: Column(
         children: [
-          // Advanced Search Hub
           Container(
             padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
             color: appBarColor,
@@ -98,15 +108,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       hintText: 'Search products...',
                       hintStyle: const TextStyle(color: Colors.white60, fontSize: 12),
                       border: InputBorder.none,
-                      suffixIcon: _searchQuery.isNotEmpty 
-                        ? IconButton(
-                            icon: const Icon(Icons.clear, color: Colors.white60, size: 14),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() => _searchQuery = '');
-                            },
-                          )
-                        : null,
                     ),
                   ),
                 ),
@@ -156,45 +157,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 final items = snapshot.data!.docs
                     .map((doc) => MarketplaceItem.fromMap(doc.id, doc.data() as Map<String, dynamic>))
                     .where((item) {
-                      // Category Filter
-                      bool catMatch = _selectedCategory == 'All' || 
-                        (_selectedCategory == 'Vehicle Sales' && (item.category == 'Cars' || item.category == 'Vehicles')) ||
-                        (_selectedCategory == 'Vehicle Rentals' && item.category == 'Rentals') ||
-                        (_selectedCategory == 'Property Lease' && item.category == 'Home & Office') ||
-                        item.category == _selectedCategory;
-                      
-                      // State Filter
+                      bool catMatch = _selectedCategory == 'All' || item.category == _selectedCategory;
                       bool stateMatch = _selectedState == 'All' || item.location == _selectedState;
-
-                      // Price Filter
                       bool priceMatch = true;
                       if (_minPrice != null && item.price < _minPrice!) priceMatch = false;
                       if (_maxPrice != null && item.price > _maxPrice!) priceMatch = false;
-
-                      // Nearby Filter (10km)
-                      bool nearbyMatch = true;
-                      if (_showNearbyOnly && _currentPosition != null && item.lat != null && item.lng != null) {
-                        double distance = Geolocator.distanceBetween(
-                          _currentPosition!.latitude, 
-                          _currentPosition!.longitude, 
-                          item.lat!, 
-                          item.lng!
-                        );
-                        nearbyMatch = distance <= 10000; // 10km
-                      }
-
-                      // Search Filter
-                      bool searchMatch = _searchQuery.isEmpty || 
-                        item.title.toLowerCase().contains(_searchQuery) || 
-                        item.description.toLowerCase().contains(_searchQuery);
-
-                      return catMatch && stateMatch && priceMatch && nearbyMatch && searchMatch;
+                      bool searchMatch = _searchQuery.isEmpty || item.title.toLowerCase().contains(_searchQuery);
+                      return catMatch && stateMatch && priceMatch && searchMatch;
                     })
                     .toList();
-
-                if (items.isEmpty) {
-                  return Center(child: Text('No matching items found.', style: TextStyle(color: secondaryTextColor)));
-                }
 
                 return GridView.builder(
                   padding: const EdgeInsets.all(4),
@@ -260,7 +231,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       child: Container(
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(10),
-                          gradient: LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: [Colors.black87, Colors.transparent]),
+                          gradient: const LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: [Colors.black87, Colors.transparent]),
                         ),
                         padding: const EdgeInsets.all(8),
                         child: Column(
@@ -268,7 +239,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(item.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis),
-                            Text('₦${item.price.toStringAsFixed(0)}', style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 10)),
+                            Text(NumberFormat.currency(symbol: 'N', decimalDigits: 0).format(item.price), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 10)),
                           ],
                         ),
                       ),
@@ -339,12 +310,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   void _showPriceFilter() {
-    final minController = TextEditingController(text: _minPrice?.toString() ?? '');
-    final maxController = TextEditingController(text: _maxPrice?.toString() ?? '');
+    final currencyFormat = NumberFormat.currency(symbol: 'N', decimalDigits: 0);
+    final minController = TextEditingController(text: _minPrice != null ? currencyFormat.format(_minPrice) : '');
+    final maxController = TextEditingController(text: _maxPrice != null ? currencyFormat.format(_maxPrice) : '');
+    
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       builder: (context) => Padding(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -352,17 +326,31 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             const SizedBox(height: 20),
             Row(
               children: [
-                Expanded(child: TextField(controller: minController, decoration: const InputDecoration(labelText: 'Min Price'), keyboardType: TextInputType.number)),
+                Expanded(
+                  child: TextField(
+                    controller: minController, 
+                    decoration: const InputDecoration(labelText: 'Min Price', hintText: 'N0'),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [CurrencyInputFormatter()],
+                  ),
+                ),
                 const SizedBox(width: 20),
-                Expanded(child: TextField(controller: maxController, decoration: const InputDecoration(labelText: 'Max Price'), keyboardType: TextInputType.number)),
+                Expanded(
+                  child: TextField(
+                    controller: maxController, 
+                    decoration: const InputDecoration(labelText: 'Max Price', hintText: 'N10M'),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [CurrencyInputFormatter()],
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () {
                 setState(() {
-                  _minPrice = double.tryParse(minController.text);
-                  _maxPrice = double.tryParse(maxController.text);
+                  _minPrice = double.tryParse(minController.text.replaceAll(RegExp(r'[^0-9]'), ''));
+                  _maxPrice = double.tryParse(maxController.text.replaceAll(RegExp(r'[^0-9]'), ''));
                 });
                 Navigator.pop(context);
               },
@@ -376,6 +364,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   Widget _buildMarketplaceCard(BuildContext context, MarketplaceItem item, ScreenThemeProvider themeProvider) {
+    final currencyFormat = NumberFormat.currency(symbol: 'N', decimalDigits: 0);
     return GestureDetector(
       onTap: () {
         Navigator.push(context, MaterialPageRoute(builder: (context) => ItemDetailScreen(item: item)));
@@ -411,36 +400,19 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                                   item.imageUrl,
                                   fit: BoxFit.cover,
                                   width: double.infinity,
-                                  loadingBuilder: (context, child, loadingProgress) {
-                                    if (loadingProgress == null) return child;
-                                    return Center(
-                                      child: CircularProgressIndicator(
-                                        value: loadingProgress.expectedTotalBytes != null
-                                            ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                                            : null,
-                                        strokeWidth: 2,
-                                      ),
-                                    );
-                                  },
-                                  errorBuilder: (context, error, stackTrace) {
-                                    print('❌ Image Network Error for ${item.title}: $error');
-                                    return Container(
-                                      color: Colors.grey.shade100,
-                                      child: const Icon(Icons.broken_image_outlined, color: Colors.grey, size: 30),
-                                    );
-                                  },
+                                  errorBuilder: (context, error, stackTrace) => Container(
+                                    color: Colors.grey.shade100,
+                                    child: const Icon(Icons.broken_image_outlined, color: Colors.grey, size: 30),
+                                  ),
                                 )
                               : Image.file(
                                   io.File(item.imageUrl.startsWith('file://') ? item.imageUrl.replaceFirst('file://', '') : item.imageUrl),
                                   fit: BoxFit.cover,
                                   width: double.infinity,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    print('❌ Image File Error for ${item.title}: $error');
-                                    return Container(
-                                      color: Colors.grey.shade100,
-                                      child: const Icon(Icons.image_not_supported_outlined, color: Colors.grey, size: 30),
-                                    );
-                                  },
+                                  errorBuilder: (context, error, stackTrace) => Container(
+                                    color: Colors.grey.shade100,
+                                    child: const Icon(Icons.image_not_supported_outlined, color: Colors.grey, size: 30),
+                                  ),
                                 ))
                           : Container(
                               color: Colors.grey.shade100,
@@ -463,16 +435,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       ),
                     ),
                   ),
-                  if (item.isVerifiedSeller)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.all(3),
-                        decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                        child: const Icon(Icons.verified, color: Colors.blue, size: 14),
-                      ),
-                    ),
                 ],
               ),
             ),
@@ -495,7 +457,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '₦${item.price.toStringAsFixed(0)}',
+                          currencyFormat.format(item.price),
                           style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: themeProvider.getColor('primary')),
                         ),
                       ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:screen_protector/screen_protector.dart';
 import 'package:whatsapp_clone/providers/screen_theme_provider.dart';
 import 'package:whatsapp_clone/services/security_service.dart';
 import 'package:whatsapp_clone/screens/chat_list_screen.dart';
@@ -94,6 +95,16 @@ class _AppLockWrapperState extends State<AppLockWrapper> {
   void initState() {
     super.initState();
     _checkLock();
+    _applySecurity();
+  }
+
+  void _applySecurity() async {
+    final themeProvider = Provider.of<ScreenThemeProvider>(context, listen: false);
+    if (themeProvider.isScreenshotPreventionEnabled) {
+      await ScreenProtector.preventScreenshotOn();
+    } else {
+      await ScreenProtector.preventScreenshotOff();
+    }
   }
 
   void _checkLock() async {
@@ -218,6 +229,7 @@ class _MainNavigationState extends State<MainNavigation> {
         : null,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
         onDestinationSelected: (index) {
           setState(() {
             _selectedIndex = index;
@@ -228,32 +240,32 @@ class _MainNavigationState extends State<MainNavigation> {
           NavigationDestination(
             icon: Icon(Icons.chat_outlined),
             selectedIcon: Icon(Icons.chat, color: Color(0xFF25D366)),
-            label: 'Chats',
+            label: '',
           ),
           NavigationDestination(
             icon: Icon(Icons.groups_outlined),
             selectedIcon: Icon(Icons.groups, color: Color(0xFF25D366)),
-            label: 'Groups',
+            label: '',
           ),
           NavigationDestination(
             icon: Icon(Icons.update_outlined),
             selectedIcon: Icon(Icons.update, color: Color(0xFF25D366)),
-            label: 'Updates',
+            label: '',
           ),
           NavigationDestination(
             icon: Icon(Icons.hub_outlined),
             selectedIcon: Icon(Icons.hub, color: Color(0xFF25D366)),
-            label: 'Channels',
+            label: '',
           ),
           NavigationDestination(
             icon: Icon(Icons.storefront_outlined),
             selectedIcon: Icon(Icons.storefront, color: Color(0xFF25D366)),
-            label: 'Marketplace',
+            label: '',
           ),
           NavigationDestination(
             icon: Icon(Icons.call_outlined),
             selectedIcon: Icon(Icons.call, color: Color(0xFF25D366)),
-            label: 'Calls',
+            label: '',
           ),
         ],
       ),

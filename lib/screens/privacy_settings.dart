@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:screen_protector/screen_protector.dart';
 import 'package:whatsapp_clone/providers/screen_theme_provider.dart';
 import 'package:whatsapp_clone/services/security_service.dart';
 
@@ -157,15 +158,43 @@ class _PrivacySettingsState extends State<PrivacySettings> {
             (v) => themeProvider.toggleStealthMode(v)
           ),
           const SizedBox(height: 16),
-          _buildSwitchTile(themeProvider, Icons.phonelink_lock, 'Screenshot Prevention', 'Prevent screenshots in private chats', _screenshotPrevention, (v) => setState(() => _screenshotPrevention = v)),
+          _buildSwitchTile(
+            themeProvider, 
+            Icons.phonelink_lock, 
+            'Screenshot Prevention', 
+            'Prevent screenshots in private chats', 
+            themeProvider.isScreenshotPreventionEnabled, 
+            (v) async {
+              themeProvider.toggleScreenshotPrevention(v);
+              if (v) {
+                await ScreenProtector.preventScreenshotOn();
+              } else {
+                await ScreenProtector.preventScreenshotOff();
+              }
+            }
+          ),
           const SizedBox(height: 12),
           Divider(color: themeProvider.getColor('divider')),
           const SizedBox(height: 12),
           
           _buildHeader('Read & Typing', textColor),
-          _buildSwitchTile(themeProvider, Icons.done_all, 'Read Receipts', 'Show blue ticks when you read messages', _readReceipts, (v) => setState(() => _readReceipts = v)),
+          _buildSwitchTile(
+            themeProvider, 
+            Icons.done_all, 
+            'Read Receipts', 
+            'Show blue ticks when you read messages', 
+            themeProvider.isReadReceiptsEnabled, 
+            (v) => themeProvider.toggleReadReceipts(v)
+          ),
           const SizedBox(height: 16),
-          _buildSwitchTile(themeProvider, Icons.keyboard_outlined, 'Typing Indicators', 'Show when you\'re typing', _typingIndicators, (v) => setState(() => _typingIndicators = v)),
+          _buildSwitchTile(
+            themeProvider, 
+            Icons.keyboard_outlined, 
+            'Typing Indicators', 
+            'Show when you\'re typing', 
+            themeProvider.isTypingIndicatorEnabled, 
+            (v) => themeProvider.toggleTypingIndicator(v)
+          ),
           const SizedBox(height: 12),
           Divider(color: themeProvider.getColor('divider')),
           const SizedBox(height: 12),

@@ -34,6 +34,9 @@ class ScreenThemeProvider extends ChangeNotifier {
   bool _isBusinessBotEnabled = false;
   bool _isStealthMode = false;
   bool _isGlassMode = false;
+  bool _isScreenshotPreventionEnabled = false;
+  bool _isTypingIndicatorEnabled = true;
+  bool _isReadReceiptsEnabled = true;
   bool _isLoaded = false;
 
   ScreenThemeProvider() {
@@ -50,6 +53,9 @@ class ScreenThemeProvider extends ChangeNotifier {
   bool get isBusinessBotEnabled => _isBusinessBotEnabled;
   bool get isStealthMode => _isStealthMode;
   bool get isGlassMode => _isGlassMode;
+  bool get isScreenshotPreventionEnabled => _isScreenshotPreventionEnabled;
+  bool get isTypingIndicatorEnabled => _isTypingIndicatorEnabled;
+  bool get isReadReceiptsEnabled => _isReadReceiptsEnabled;
   bool get isLoaded => _isLoaded;
 
   void _loadFromPrefs() async {
@@ -64,6 +70,9 @@ class ScreenThemeProvider extends ChangeNotifier {
     _isBusinessBotEnabled = prefs.getBool('isBusinessBotEnabled') ?? false;
     _isStealthMode = prefs.getBool('isStealthMode') ?? false;
     _isGlassMode = prefs.getBool('isGlassMode') ?? false;
+    _isScreenshotPreventionEnabled = prefs.getBool('isScreenshotPreventionEnabled') ?? false;
+    _isTypingIndicatorEnabled = prefs.getBool('isTypingIndicatorEnabled') ?? true;
+    _isReadReceiptsEnabled = prefs.getBool('isReadReceiptsEnabled') ?? true;
     _isLoaded = true;
     notifyListeners();
   }
@@ -80,6 +89,9 @@ class ScreenThemeProvider extends ChangeNotifier {
     prefs.setBool('isBusinessBotEnabled', _isBusinessBotEnabled);
     prefs.setBool('isStealthMode', _isStealthMode);
     prefs.setBool('isGlassMode', _isGlassMode);
+    prefs.setBool('isScreenshotPreventionEnabled', _isScreenshotPreventionEnabled);
+    prefs.setBool('isTypingIndicatorEnabled', _isTypingIndicatorEnabled);
+    prefs.setBool('isReadReceiptsEnabled', _isReadReceiptsEnabled);
   }
 
   void toggleDarkMode(bool value) {
@@ -115,6 +127,24 @@ class ScreenThemeProvider extends ChangeNotifier {
 
   void toggleGlassMode(bool value) {
     _isGlassMode = value;
+    _saveToPrefs();
+    notifyListeners();
+  }
+
+  void toggleScreenshotPrevention(bool value) {
+    _isScreenshotPreventionEnabled = value;
+    _saveToPrefs();
+    notifyListeners();
+  }
+
+  void toggleTypingIndicator(bool value) {
+    _isTypingIndicatorEnabled = value;
+    _saveToPrefs();
+    notifyListeners();
+  }
+
+  void toggleReadReceipts(bool value) {
+    _isReadReceiptsEnabled = value;
     _saveToPrefs();
     notifyListeners();
   }

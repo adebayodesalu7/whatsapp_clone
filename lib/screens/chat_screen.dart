@@ -9,6 +9,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:whatsapp_clone/services/security_service.dart';
+import 'package:whatsapp_clone/services/cloudinary_service.dart';
 import 'package:whatsapp_clone/services/chat_service.dart';
 import 'package:whatsapp_clone/services/ai_service.dart';
 import 'package:whatsapp_clone/services/storage_service.dart';
@@ -197,6 +199,43 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  void _createAIVideo() async {
+    Navigator.pop(context); // Close attachment menu
+    final picker = ImagePicker();
+    final image = await picker.pickImage(source: ImageSource.gallery);
+    if (image == null) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).cardColor,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 20),
+            Text('Titan AI is generating video...', style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final cloudinary = CloudinaryService();
+      final uploadResult = await cloudinary.uploadMarketplaceImage(image);
+      
+      if (uploadResult != null && uploadResult['publicId'] != null) {
+        final videoUrl = cloudinary.getImageToVideoUrl(uploadResult['publicId']);
+        _chatService.sendVideoMessage(widget.receiverId, videoUrl, widget.isGroup);
+      }
+    } catch (e) {
+      print('❌ AI Video Error: $e');
+    } finally {
+      if (mounted) Navigator.pop(context); // Close loading
+    }
+  }
+
   void _showInvoiceDialog() {
     final nameController = TextEditingController();
     final amountController = TextEditingController();
@@ -242,61 +281,117 @@ class _ChatScreenState extends State<ChatScreen> {
     final themeProvider = Provider.of<ScreenThemeProvider>(context);
     final isDark = themeProvider.isDarkMode;
     final textColor = themeProvider.getColor('text');
-    final secondaryTextColor = themeProvider.getColor('textSecondary');
     final appBarColor = themeProvider.getColor('appBar');
+    final secondaryTextColor = themeProvider.getColor('textSecondary');
     final currentBackground = themeProvider.getChatBackground();
 
     return Scaffold(
       extendBodyBehindAppBar: themeProvider.isGlassMode,
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(kToolbarHeight),
-        child: ClipRRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(
-              sigmaX: themeProvider.isGlassMode ? 12.0 : 0.0,
-              sigmaY: themeProvider.isGlassMode ? 12.0 : 0.0,
-            ),
-            child: AppBar(
-              backgroundColor: themeProvider.isGlassMode ? appBarColor.withOpacity(0.7) : appBarColor,
-              elevation: 0,
-              leadingWidth: 70,
-              leading: InkWell(
-                onTap: () => Navigator.pop(context),
-                child: Row(
-                  children: [
-                    const Icon(Icons.arrow_back),
-                    const SizedBox(width: 2),
-                    Avatar(name: widget.contactName, size: 36),
+        child: StreamBuilder<DocumentSnapshot>(
+          stream: FirebaseFirestore.instance.collection(widget.isGroup ? 'groups' : 'users').doc(widget.receiverId).snapshots(),
+          builder: (context, snapshot) {
+            String? photoUrl;
+            bool isTitanElite = false;
+            if (snapshot.hasData && snapshot.data!.exists) {
+              final data = snapshot.data!.data() as Map<String, dynamic>;
+              photoUrl = data['photoUrl'] ?? data['iconUrl'];
+              isTitanElite = data['isTitanElite'] ?? false;
+            }
+
+            return ClipRRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(
+                  sigmaX: themeProvider.isGlassMode ? 12.0 : 0.0,
+                  sigmaY: themeProvider.isGlassMode ? 12.0 : 0.0,
+                ),
+                child: AppBar(
+                  backgroundColor: themeProvider.isGlassMode ? appBarColor.withOpacity(0.7) : appBarColor,
+                  elevation: 0,
+                  leadingWidth: 75,
+                  leading: InkWell(
+                    onTap: () => Navigator.pop(context),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(width: 4),
+                        const Icon(Icons.arrow_back, size: 22),
+                        const SizedBox(width: 2),
+                        Avatar(name: widget.contactName, imageUrl: photoUrl, size: 36, isTitanElite: isTitanElite),
+                      ],
+                    ),
+                  ),
+                  titleSpacing: 0,
+                  title: InkWell(
+                    onTap: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => ContactInfoScreen(contactId: widget.receiverId, contactName: widget.contactName, isGroup: widget.isGroup)));
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(widget.contactName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                          Text(widget.isGroup ? 'active' : 'online', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.normal, color: Colors.white70)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  actions: [
+                    IconButton(icon: const Icon(Icons.videocam, size: 22), onPressed: () {}),
+                    IconButton(icon: const Icon(Icons.call, size: 20), onPressed: () {}),
+                    PopupMenuButton<String>(
+                      iconSize: 22,
+                      onSelected: (value) {
+                        switch (value) {
+                          case 'view_contact':
+                            Navigator.push(context, MaterialPageRoute(builder: (context) => ContactInfoScreen(contactId: widget.receiverId, contactName: widget.contactName, isGroup: widget.isGroup)));
+                            break;
+                          case 'clear':
+                            _chatService.clearChat(widget.receiverId, isGroup: widget.isGroup);
+                            break;
+                          case 'disappearing':
+                            _showDisappearingMessagesDialog();
+                            break;
+                          case 'lock':
+                            _toggleChatLock();
+                            break;
+                          case 'mute':
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Notifications muted for 8 hours')));
+                            break;
+                          case 'more':
+                            _showMoreOptions(context);
+                            break;
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(value: 'view_contact', child: Text('View Contact')),
+                        const PopupMenuItem(value: 'media', child: Text('Media, links, and docs')),
+                        const PopupMenuItem(value: 'search', child: Text('Search')),
+                        const PopupMenuItem(value: 'mute', child: Text('Mute notifications')),
+                        const PopupMenuItem(value: 'disappearing', child: Text('Disappearing messages')),
+                        const PopupMenuItem(value: 'wallpaper', child: Text('Wallpaper')),
+                        const PopupMenuItem(value: 'lock', child: Text('Lock Chat')),
+                        const PopupMenuItem(value: 'clear', child: Text('Clear Chat')),
+                        const PopupMenuItem(value: 'more', child: Text('More')),
+                      ],
+                    ),
                   ],
                 ),
               ),
-              title: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(widget.contactName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  const Text('online', style: TextStyle(fontSize: 11, fontWeight: FontWeight.normal)),
-                ],
-              ),
-              actions: [
-                IconButton(icon: const Icon(Icons.videocam), onPressed: () {}),
-                IconButton(icon: const Icon(Icons.call), onPressed: () {}),
-                PopupMenuButton<String>(
-                  onSelected: (value) {
-                    if (value == 'clear') _chatService.clearChat(widget.receiverId, isGroup: widget.isGroup);
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(value: 'view_contact', child: Text('View Contact')),
-                    const PopupMenuItem(value: 'clear', child: Text('Clear Chat')),
-                  ],
-                ),
-              ],
-            ),
-          ),
+            );
+          }
         ),
       ),
       body: Container(
         decoration: BoxDecoration(
           color: isDark ? Colors.black : const Color(0xFFE5DDD5),
+          image: themeProvider.wallpaperIndex > 0 ? DecorationImage(
+            image: NetworkImage('https://res.cloudinary.com/ddvvinsdr/image/upload/v1/wallpapers/wp_${themeProvider.wallpaperIndex}.jpg'),
+            fit: BoxFit.cover,
+            opacity: 0.4,
+          ) : null,
           gradient: currentBackground.gradient,
         ),
         child: Column(
@@ -342,7 +437,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             final messages = snapshot.data!.docs;
                             return ListView.builder(
                               reverse: true,
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
                               itemCount: messages.length,
                               itemBuilder: (context, index) {
                                 final doc = messages[index];
@@ -367,6 +462,59 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  void _showMoreOptions(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).cardColor,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(leading: const Icon(Icons.report_problem_outlined), title: const Text('Report'), onTap: () => Navigator.pop(context)),
+            ListTile(leading: const Icon(Icons.block), title: const Text('Block'), onTap: () => Navigator.pop(context)),
+            ListTile(leading: const Icon(Icons.exit_to_app), title: const Text('Exit group'), onTap: () => Navigator.pop(context)),
+            ListTile(leading: const Icon(Icons.shortcut), title: const Text('Add shortcut'), onTap: () => Navigator.pop(context)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showDisappearingMessagesDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Disappearing Messages'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(title: const Text('Off'), leading: Radio(value: 0, groupValue: _disappearingTimer, onChanged: (v)=>_setTimer(0))),
+            ListTile(title: const Text('24 Hours'), leading: Radio(value: 86400, groupValue: _disappearingTimer, onChanged: (v)=>_setTimer(86400))),
+            ListTile(title: const Text('7 Days'), leading: Radio(value: 604800, groupValue: _disappearingTimer, onChanged: (v)=>_setTimer(604800))),
+            ListTile(title: const Text('90 Days'), leading: Radio(value: 7776000, groupValue: _disappearingTimer, onChanged: (v)=>_setTimer(7776000))),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _setTimer(int seconds) {
+    setState(() => _disappearingTimer = seconds);
+    final chatId = widget.isGroup ? widget.receiverId : _chatService.getChatId(_currentUserId!, widget.receiverId);
+    _chatService.setDisappearingTimer(chatId, seconds);
+    Navigator.pop(context);
+  }
+
+  void _toggleChatLock() async {
+    final security = SecurityService();
+    final success = await security.authenticate();
+    if (success) {
+      final chatId = widget.isGroup ? widget.receiverId : _chatService.getChatId(_currentUserId!, widget.receiverId);
+      setState(() => _isLocked = !_isLocked);
+      _chatService.toggleChatLock(chatId, _isLocked);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_isLocked ? 'Chat locked' : 'Chat unlocked')));
+    }
+  }
+
   Widget _buildPinnedMessagesBar(Color textColor) {
     return StreamBuilder<QuerySnapshot>(
       stream: _chatService.getPinnedMessages(widget.receiverId, widget.isGroup),
@@ -382,21 +530,21 @@ class _ChatScreenState extends State<ChatScreen> {
             boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                const Icon(Icons.push_pin, size: 18, color: Colors.blueAccent),
+                const Icon(Icons.push_pin, size: 16, color: Colors.blueAccent),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     (pinnedDocs.first.data() as Map<String, dynamic>)['message'] ?? '',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
                   ),
                 ),
                 if (pinnedDocs.length > 1)
-                  Text("${pinnedDocs.length} pinned", style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                  Text("${pinnedDocs.length} pinned", style: const TextStyle(fontSize: 9, color: Colors.grey)),
               ],
             ),
           ),
@@ -407,14 +555,16 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildSmartRepliesBar() {
     return Container(
-      height: 50,
+      height: 44,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
         itemCount: _smartReplies.length,
         itemBuilder: (context, index) => Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: ActionChip(
-            label: Text(_smartReplies[index]),
+            label: Text(_smartReplies[index], style: const TextStyle(fontSize: 11)),
+            padding: EdgeInsets.zero,
             onPressed: () {
               _messageController.text = _smartReplies[index];
               _sendMessage();
@@ -427,7 +577,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildBottomBar(ScreenThemeProvider themeProvider, Color textColor, Color secondaryTextColor) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
       color: Colors.transparent,
       child: Row(
         children: [
@@ -439,36 +589,36 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               child: Row(
                 children: [
-                  IconButton(icon: const Icon(Icons.emoji_emotions_outlined, color: Colors.grey), onPressed: () {}),
+                  IconButton(icon: const Icon(Icons.emoji_emotions_outlined, color: Colors.grey, size: 22), onPressed: () {}),
                   Expanded(
                     child: TextField(
                       controller: _messageController,
-                      style: TextStyle(color: textColor),
+                      style: TextStyle(color: textColor, fontSize: 14),
                       decoration: InputDecoration(
                         hintText: 'Type a message',
-                        hintStyle: TextStyle(color: secondaryTextColor),
+                        hintStyle: TextStyle(color: secondaryTextColor, fontSize: 13),
                         border: InputBorder.none,
                       ),
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.attach_file, color: Colors.grey),
+                    icon: const Icon(Icons.attach_file, color: Colors.grey, size: 22),
                     onPressed: _showAttachmentMenu,
                   ),
-                  IconButton(icon: const Icon(Icons.camera_alt, color: Colors.grey), onPressed: () => _pickImage(ImageSource.camera)),
+                  IconButton(icon: const Icon(Icons.camera_alt, color: Colors.grey, size: 22), onPressed: () => _pickImage(ImageSource.camera)),
                 ],
               ),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           GestureDetector(
             onLongPress: _startRecording,
             onLongPressUp: _stopRecording,
             child: CircleAvatar(
               backgroundColor: const Color(0xFF25D366),
-              radius: 24,
+              radius: 22,
               child: IconButton(
-                icon: const Icon(Icons.mic, color: Colors.white),
+                icon: const Icon(Icons.mic, color: Colors.white, size: 22),
                 onPressed: _sendMessage,
               ),
             ),
@@ -487,10 +637,11 @@ class _ChatScreenState extends State<ChatScreen> {
           color: Theme.of(context).cardColor,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         child: Wrap(
-          spacing: 20,
-          runSpacing: 20,
+          spacing: 16,
+          runSpacing: 16,
+          alignment: WrapAlignment.center,
           children: [
             _buildAttachOption(Icons.description, Colors.indigo, 'Document', onTap: _pickDocument),
             _buildAttachOption(Icons.camera_alt, Colors.pink, 'Camera', onTap: () => _pickImage(ImageSource.camera)),
@@ -498,6 +649,7 @@ class _ChatScreenState extends State<ChatScreen> {
             _buildAttachOption(Icons.videocam, Colors.red, 'Video', onTap: _pickVideo),
             _buildAttachOption(Icons.location_on, Colors.green, 'Location', onTap: _shareLocation),
             _buildAttachOption(Icons.person, Colors.blue, 'Contact', onTap: _pickContact),
+            _buildAttachOption(Icons.movie_creation, Colors.deepOrange, 'AI Video', onTap: _createAIVideo),
             _buildAttachOption(Icons.receipt_long, Colors.teal, 'Invoice', onTap: _showInvoiceDialog),
             _buildAttachOption(Icons.videogame_asset, Colors.deepPurple, 'Games', onTap: () {
               Navigator.pop(context);
@@ -512,22 +664,27 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _buildAttachOption(IconData icon, Color color, String label, {VoidCallback? onTap}) {
     return InkWell(
       onTap: onTap ?? () => Navigator.pop(context),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircleAvatar(radius: 30, backgroundColor: color, child: Icon(icon, color: Colors.white, size: 28)),
-          const SizedBox(height: 8),
-          Text(label, style: const TextStyle(fontSize: 12)),
-        ],
+      child: Container(
+        width: 70,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(radius: 26, backgroundColor: color, child: Icon(icon, color: Colors.white, size: 24)),
+            const SizedBox(height: 6),
+            Text(label, style: const TextStyle(fontSize: 10), textAlign: TextAlign.center),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildMessageBubble(String messageId, Map<String, dynamic> data, bool isDark, Color textColor, Color secondaryTextColor) {
+    final themeProvider = Provider.of<ScreenThemeProvider>(context, listen: false);
     final bool isMe = data['senderId'] == _currentUserId;
     final String type = data['type'] ?? 'text';
     final String messageText = data['message'] ?? '';
     final String? imageUrl = data['imageUrl'];
+    final String? videoUrl = data['videoUrl'];
     final bool isPinned = data['isPinned'] ?? false;
     
     return Align(
@@ -536,17 +693,26 @@ class _ChatScreenState extends State<ChatScreen> {
         onLongPress: () => _showReactionAndOptions(messageId, type, messageText, isMe, imageUrl, isPinned),
         child: Container(
           margin: const EdgeInsets.symmetric(vertical: 4),
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: isMe ? const Color(0xFFDCF8C6) : (isDark ? Colors.grey.shade800 : Colors.white),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(themeProvider.bubbleRadius),
           ),
           constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (type == 'text') Text(messageText, style: TextStyle(color: isDark && !isMe ? Colors.white : Colors.black87)),
-              if (type == 'image' && imageUrl != null) Image.network(imageUrl),
+              if (type == 'text') Text(messageText, style: TextStyle(color: isDark && !isMe ? Colors.white : Colors.black87, fontSize: 13)),
+              if (type == 'image' && imageUrl != null) 
+                 ClipRRect(
+                   borderRadius: BorderRadius.circular(themeProvider.bubbleRadius > 5 ? themeProvider.bubbleRadius - 5 : 0),
+                   child: Image.network(imageUrl, loadingBuilder: (context, child, loadingProgress) {
+                     if (loadingProgress == null) return child;
+                     return const Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(strokeWidth: 2));
+                   }),
+                 ),
+              if (type == 'video' && videoUrl != null)
+                _buildVideoThumbnail(videoUrl),
               if (type == 'voice') VoiceMessageWidget(audioUrl: data['audioUrl'], isMe: isMe, meColor: const Color(0xFFDCF8C6), otherColor: Colors.white),
               if (type == 'invoice') _buildInvoiceBubble(data['metadata'] ?? {}, isMe, messageId, const Color(0xFFDCF8C6), Colors.white, Colors.black87),
               const SizedBox(height: 4),
@@ -555,7 +721,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 children: [
                   Text(
                     '10:00 AM',
-                    style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+                    style: TextStyle(fontSize: 9, color: Colors.grey.shade600),
                   ),
                   if (isPinned) ...[
                     const SizedBox(width: 4),
@@ -566,6 +732,39 @@ class _ChatScreenState extends State<ChatScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildVideoThumbnail(String url) {
+    return GestureDetector(
+      onTap: () async {
+        if (await canLaunchUrl(Uri.parse(url))) {
+          await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+        }
+      },
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            height: 150,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.black12,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.movie_outlined, size: 50, color: Colors.grey),
+          ),
+          const CircleAvatar(
+            backgroundColor: Colors.black54,
+            child: Icon(Icons.play_arrow, color: Colors.white),
+          ),
+          const Positioned(
+            bottom: 8,
+            right: 8,
+            child: Text('AI VIDEO', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
     );
   }
@@ -621,11 +820,18 @@ class _ChatScreenState extends State<ChatScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(isEscrow ? '🛡️ ESCROW INVOICE' : '🧾 INVOICE', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blue)),
-          Text(itemName, style: const TextStyle(fontWeight: FontWeight.bold)),
-          Text('₦${NumberFormat('#,###').format(amount)}', style: const TextStyle(fontSize: 18, color: Colors.green)),
-          Text('Status: $status', style: const TextStyle(fontSize: 12)),
+          Text(itemName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          Text('₦${NumberFormat('#,###').format(amount)}', style: const TextStyle(fontSize: 16, color: Colors.green, fontWeight: FontWeight.w900)),
+          Text('Status: $status', style: const TextStyle(fontSize: 11)),
           if (!isMe && status == 'Pending')
-            ElevatedButton(onPressed: () {}, child: const Text('PAY NOW')),
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: ElevatedButton(
+                onPressed: () {}, 
+                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 36)),
+                child: const Text('PAY NOW', style: TextStyle(fontSize: 12)),
+              ),
+            ),
         ],
       ),
     );

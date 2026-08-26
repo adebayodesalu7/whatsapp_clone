@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/screen_theme_provider.dart';
+import '../models/enums.dart';
 
 class AppearanceScreen extends StatelessWidget {
   const AppearanceScreen({super.key});
@@ -84,13 +85,69 @@ class AppearanceScreen extends StatelessWidget {
                 ListTile(
                   leading: Icon(Icons.wallpaper, color: primaryColor),
                   title: Text('Chat Wallpaper', style: TextStyle(color: textColor, fontWeight: FontWeight.w500)),
-                  onTap: () {},
+                  subtitle: Text('Selected: ${chatBackgrounds[themeProvider.wallpaperIndex].name}', style: TextStyle(color: secondaryTextColor, fontSize: 12)),
+                  onTap: () => _showWallpaperPicker(context, themeProvider),
                 ),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  void _showWallpaperPicker(BuildContext context, ScreenThemeProvider provider) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: provider.getColor('card'),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Choose Chat Wallpaper', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: provider.getColor('text'))),
+              const SizedBox(height: 20),
+              SizedBox(
+                height: 120,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: chatBackgrounds.length,
+                  itemBuilder: (context, index) {
+                    final bg = chatBackgrounds[index];
+                    final isSelected = provider.wallpaperIndex == index;
+                    return GestureDetector(
+                      onTap: () {
+                        provider.setWallpaperIndex(index);
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        width: 80,
+                        margin: const EdgeInsets.only(right: 12),
+                        decoration: BoxDecoration(
+                          gradient: bg.gradient,
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(color: isSelected ? provider.getColor('primary') : Colors.transparent, width: 4),
+                          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
+                        ),
+                        child: Center(
+                          child: Text(
+                            bg.name, 
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
+                            textAlign: TextAlign.center,
+                          )
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
     );
   }
 

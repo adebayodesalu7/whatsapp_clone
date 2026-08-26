@@ -39,9 +39,6 @@ class _ChatSettingsState extends State<ChatSettings> {
           const SizedBox(height: 12),
           
           _buildWallpaperTile(context, themeProvider),
-          const SizedBox(height: 16),
-          
-          _buildFontSizeTile(context, themeProvider),
           const SizedBox(height: 12),
           Divider(color: themeProvider.getColor('divider')),
           const SizedBox(height: 12),
@@ -125,67 +122,38 @@ class _ChatSettingsState extends State<ChatSettings> {
     );
   }
 
-  Widget _buildFontSizeTile(BuildContext context, ScreenThemeProvider provider) {
-    String sizeLabel = 'Medium';
-    if (provider.fontSize < 14) sizeLabel = 'Small';
-    if (provider.fontSize > 18) sizeLabel = 'Large';
-    final textColor = provider.getColor('text');
-    final secondaryTextColor = provider.getColor('textSecondary');
-
-    return Row(
-      children: [
-        Icon(Icons.text_fields_outlined, color: provider.getColor('primary'), size: 28),
-        const SizedBox(width: 20),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Font Size', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
-              Text('Selected: $sizeLabel', style: TextStyle(fontSize: 12, color: secondaryTextColor)),
-            ],
-          ),
-        ),
-        DropdownButton<double>(
-          value: [12.0, 16.0, 20.0].contains(provider.fontSize) ? provider.fontSize : 16.0,
-          dropdownColor: provider.getColor('card'),
-          style: TextStyle(color: textColor),
-          items: const [
-            DropdownMenuItem(value: 12.0, child: Text('Small')),
-            DropdownMenuItem(value: 16.0, child: Text('Medium')),
-            DropdownMenuItem(value: 20.0, child: Text('Large')),
-          ],
-          onChanged: (v) {
-            if (v != null) provider.setFontSize(v);
-          },
-          underline: const SizedBox(),
-        ),
-      ],
-    );
-  }
-
   void _showChatHistoryDialog(BuildContext context, ScreenThemeProvider provider) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: provider.getColor('card'),
-        title: Text('Chat History', style: TextStyle(color: provider.getColor('text'))),
+        title: Text('Chat History', style: TextStyle(color: provider.getColor('text'), fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
               leading: Icon(Icons.upload_file, color: provider.getColor('primary')),
               title: Text('Export Chats', style: TextStyle(color: provider.getColor('text'))),
-              onTap: () => Navigator.pop(context),
+              onTap: () {
+                 Navigator.pop(context);
+                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Preparing chat history export...')));
+              },
             ),
             ListTile(
               leading: const Icon(Icons.clear_all, color: Colors.orange),
               title: Text('Clear All Chats', style: TextStyle(color: provider.getColor('text'))),
-              onTap: () => Navigator.pop(context),
+              onTap: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Clearing all messages...')));
+              },
             ),
             ListTile(
               leading: const Icon(Icons.delete_forever, color: Colors.red),
               title: Text('Delete All Chats', style: TextStyle(color: provider.getColor('text'))),
-              onTap: () => Navigator.pop(context),
+              onTap: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Deleting all chats...')));
+              },
             ),
           ],
         ),

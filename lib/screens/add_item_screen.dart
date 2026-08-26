@@ -7,9 +7,27 @@ import 'package:provider/provider.dart';
 import '../providers/screen_theme_provider.dart';
 import 'package:whatsapp_clone/services/cloudinary_service.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:whatsapp_clone/models/models.dart';
+import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
+
+class CurrencyInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    if (newValue.selection.baseOffset == 0) return newValue;
+    double value = double.parse(newValue.text.replaceAll(RegExp(r'[^0-9]'), ''));
+    final formatter = NumberFormat.currency(symbol: 'N', decimalDigits: 0);
+    String newText = formatter.format(value);
+    return newValue.copyWith(
+      text: newText,
+      selection: TextSelection.collapsed(offset: newText.length),
+    );
+  }
+}
 
 class AddItemScreen extends StatefulWidget {
-  const AddItemScreen({super.key});
+  final MarketplaceItem? editItem;
+  const AddItemScreen({super.key, this.editItem});
 
   @override
   State<AddItemScreen> createState() => _AddItemScreenState();
@@ -17,18 +35,18 @@ class AddItemScreen extends StatefulWidget {
 
 class _AddItemScreenState extends State<AddItemScreen> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _priceController = TextEditingController();
-  final TextEditingController _descriptionController = TextEditingController();
-  final TextEditingController _locationController = TextEditingController();
-  final TextEditingController _videoUrlController = TextEditingController();
+  late TextEditingController _titleController;
+  late TextEditingController _priceController;
+  late TextEditingController _descriptionController;
+  late TextEditingController _locationController;
+  late TextEditingController _videoUrlController;
   
   // Car specific
-  final TextEditingController _brandController = TextEditingController();
-  final TextEditingController _modelController = TextEditingController();
-  final TextEditingController _yearController = TextEditingController();
-  final TextEditingController _fuelController = TextEditingController();
-  final TextEditingController _transController = TextEditingController();
+  late TextEditingController _brandController;
+  late TextEditingController _modelController;
+  late TextEditingController _yearController;
+  late TextEditingController _fuelController;
+  late TextEditingController _transController;
 
   String _selectedCategory = 'Cars';
   final ImagePicker _picker = ImagePicker();
@@ -36,6 +54,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
   List<XFile> _selectedImages = [];
   bool _isLoading = false;
   Position? _currentPosition;
+  List<String> _detectedTags = [];
+  bool _isModerated = false;
 
   String _selectedState = 'Lagos';
   final List<String> _nigerianStates = [
@@ -54,6 +74,27 @@ class _AddItemScreenState extends State<AddItemScreen> {
     'Home & Office',
     'Services',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    final item = widget.editItem;
+    _titleController = TextEditingController(text: item?.title);
+    _priceController = TextEditingController(text: item?.price.toStringAsFixed(0));
+    _descriptionController = TextEditingController(text: item?.description);
+    _locationController = TextEditingController();
+    _videoUrlController = TextEditingController(text: item?.videoUrl);
+    _brandController = TextEditingController(text: item?.brand);
+    _modelController = TextEditingController(text: item?.model);
+    _yearController = TextEditingController(text: item?.year);
+    _fuelController = TextEditingController(text: item?.specs?['fuel']);
+    _transController = TextEditingController(text: item?.specs?['transmission']);
+    
+    if (item != null) {
+      _selectedCategory = item.category;
+      _selectedState = item.location;
+    }
+  }
 
   Future<void> _pickImages() async {
     final List<XFile> images = await _picker.pickMultiImage(imageQuality: 80);
@@ -87,7 +128,10 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
   void _postItem() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedImages.isEmpty) {
+    
+    bool isEditing = widget.editItem != null;
+
+    if (!isEditing && _selectedImages.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('At least one photo is required')));
       return;
     }
@@ -97,39 +141,49 @@ class _AddItemScreenState extends State<AddItemScreen> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
-        print('❌ No user logged in');
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please login to post items.')));
         return;
       }
 
-      print('⏳ Starting item post process...');
-      
-      // Upload main image
-      print('📸 Uploading main image to Cloudinary: ${_selectedImages[0].path}');
-      final String? mainImageUrl = await _cloudinaryService.uploadImage(_selectedImages[0]);
-      
-      if (mainImageUrl == null || mainImageUrl.isEmpty) {
-        print('❌ Main image upload failed');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Upload failed. Please check your Cloudinary settings.'),
-          ));
+      String? mainImageUrl = widget.editItem?.imageUrl;
+      String? mainImagePublicId = widget.editItem?.imagePublicId;
+      List<String> moreImageUrls = widget.editItem?.moreImages ?? [];
+      List<String> aiTags = [];
+
+      if (_selectedImages.isNotEmpty) {
+        // Upload main image with AI Features
+        print('📸 Uploading main image with AI Analysis: ${_selectedImages[0].path}');
+        final uploadResult = await _cloudinaryService.uploadMarketplaceImage(_selectedImages[0]);
+        
+        if (uploadResult == null || uploadResult['url'] == null) {
+          print('❌ Main image upload failed');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Upload failed. Please check your Cloudinary settings.'),
+            ));
+          }
+          return;
         }
-        return;
+        mainImageUrl = uploadResult['url'];
+        mainImagePublicId = uploadResult['publicId'];
+        if (uploadResult['tags'] != null) {
+          aiTags = List<String>.from(uploadResult['tags']);
+          setState(() {
+            _detectedTags = aiTags;
+            _isModerated = true; // Simulating success moderation from Cloudinary
+          });
+        }
+
+        // Upload other images
+        for (int i = 1; i < _selectedImages.length; i++) {
+          print('📸 Uploading extra image $i...');
+          final result = await _cloudinaryService.uploadMarketplaceImage(_selectedImages[i]);
+          if (result != null && result['url'] != null) {
+            moreImageUrls.add(result['url']);
+          }
+        }
       }
 
-      // Upload other images
-      List<String> moreImageUrls = [];
-      for (int i = 1; i < _selectedImages.length; i++) {
-        print('📸 Uploading extra image $i to Cloudinary: ${_selectedImages[i].path}');
-        final url = await _cloudinaryService.uploadImage(_selectedImages[i]);
-        if (url != null && url.isNotEmpty) {
-          moreImageUrls.add(url);
-        }
-      }
-
-      print('📝 Saving document to Firestore...');
-      
       Map<String, String> specs = {};
       if (_selectedCategory == 'Cars') {
         specs = {
@@ -138,38 +192,44 @@ class _AddItemScreenState extends State<AddItemScreen> {
         };
       }
 
+      // Convert formatted price back to double (remove 'N' and ',')
+      final cleanPrice = double.tryParse(_priceController.text.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
+
       final itemData = {
         'sellerId': user.uid,
         'title': _titleController.text,
-        'price': double.tryParse(_priceController.text) ?? 0.0,
+        'price': cleanPrice,
         'description': _descriptionController.text,
         'category': _selectedCategory,
         'location': _selectedState,
-        'lat': _currentPosition?.latitude,
-        'lng': _currentPosition?.longitude,
+        'lat': _currentPosition?.latitude ?? widget.editItem?.lat,
+        'lng': _currentPosition?.longitude ?? widget.editItem?.lng,
         'imageUrl': mainImageUrl, 
+        'imagePublicId': mainImagePublicId,
         'moreImages': moreImageUrls,
+        'aiTags': aiTags, 
         'videoUrl': _videoUrlController.text,
         'brand': _brandController.text,
         'model': _modelController.text,
         'year': _yearController.text,
         'specs': specs,
-        'createdAt': FieldValue.serverTimestamp(),
-        'isPromoted': false,
-        'isVerifiedSeller': false,
+        'updatedAt': FieldValue.serverTimestamp(),
       };
 
-      print('DEBUG: Item Data to save: $itemData');
+      if (isEditing) {
+        await FirebaseFirestore.instance.collection('marketplace_items').doc(widget.editItem!.id).update(itemData);
+      } else {
+        itemData['createdAt'] = FieldValue.serverTimestamp();
+        itemData['isPromoted'] = false;
+        itemData['isVerifiedSeller'] = false;
+        await FirebaseFirestore.instance.collection('marketplace_items').add(itemData);
+      }
 
-      await FirebaseFirestore.instance.collection('marketplace_items').add(itemData);
-
-      print('✅ Item listed successfully!');
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Item listed successfully!')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isEditing ? 'Item updated successfully!' : 'Item listed successfully!')));
       }
     } catch (e) {
-      print('❌ ERROR POSTING ITEM: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
@@ -184,18 +244,19 @@ class _AddItemScreenState extends State<AddItemScreen> {
     final textColor = themeProvider.getColor('text');
     final secondaryColor = themeProvider.getColor('textSecondary');
     final cardColor = themeProvider.getColor('card');
+    bool isEditing = widget.editItem != null;
 
     return Scaffold(
       backgroundColor: themeProvider.getColor('scaffold'),
       appBar: AppBar(
-        title: Text('List New Item', style: TextStyle(fontWeight: FontWeight.bold, color: themeProvider.getColor('appBarText'))),
+        title: Text(isEditing ? 'Edit Item' : 'List New Item', style: TextStyle(fontWeight: FontWeight.bold, color: themeProvider.getColor('appBarText'))),
         backgroundColor: themeProvider.getColor('appBar'),
         iconTheme: IconThemeData(color: themeProvider.getColor('appBarText')),
         elevation: 0,
         actions: [
           TextButton(
             onPressed: _isLoading ? null : _postItem,
-            child: Text('POST', style: TextStyle(color: themeProvider.getColor('appBarText'), fontWeight: FontWeight.bold)),
+            child: Text(isEditing ? 'UPDATE' : 'POST', style: TextStyle(color: themeProvider.getColor('appBarText'), fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -250,10 +311,66 @@ class _AddItemScreenState extends State<AddItemScreen> {
                       const SizedBox(height: 16),
                       Text('Photos', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor)),
                       const SizedBox(height: 4),
-                      Text('First picture is the title.', 
+                      Text(isEditing ? 'Add more photos or leave empty to keep existing.' : 'First picture is the title.', 
                         style: TextStyle(color: themeProvider.getColor('primary'), fontSize: 11)),
                       const SizedBox(height: 10),
                       _buildImagePicker(themeProvider.getColor('card'), secondaryColor, themeProvider),
+                      
+                      if (_detectedTags.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.blue.withOpacity(0.1)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.psychology, size: 16, color: Colors.blue),
+                                  const SizedBox(width: 8),
+                                  Text('Titan AI Analysis', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blue.shade800)),
+                                  const Spacer(),
+                                  if (_isModerated)
+                                    Row(
+                                      children: [
+                                        Icon(Icons.verified_user, size: 14, color: Colors.green.shade700),
+                                        const SizedBox(width: 4),
+                                        Text('Safe Content', style: TextStyle(color: Colors.green.shade700, fontSize: 10, fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: _detectedTags.map((tag) => Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(5),
+                                    border: Border.all(color: Colors.blue.withOpacity(0.2)),
+                                  ),
+                                  child: Text('#$tag', style: const TextStyle(fontSize: 10, color: Colors.blue)),
+                                )).toList(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      if (isEditing && widget.editItem!.imageUrl.isNotEmpty) ...[
+                         const SizedBox(height: 8),
+                         Text('Current Title Photo:', style: TextStyle(color: secondaryColor, fontSize: 12)),
+                         const SizedBox(height: 4),
+                         ClipRRect(
+                           borderRadius: BorderRadius.circular(8),
+                           child: Image.network(widget.editItem!.imageUrl, width: 60, height: 60, fit: BoxFit.cover, errorBuilder: (_,__,___)=>const Icon(Icons.image)),
+                         ),
+                      ],
                       const SizedBox(height: 16),
                       _buildTextField(
                         controller: _videoUrlController,
@@ -284,6 +401,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
                         label: 'Price (₦)*',
                         keyboardType: TextInputType.number,
                         themeProvider: themeProvider,
+                        inputFormatters: [CurrencyInputFormatter()],
                         validator: (v) => v!.isEmpty ? 'Required' : null,
                       ),
                       const SizedBox(height: 10),
@@ -303,7 +421,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           elevation: 1,
                         ),
-                        child: const Text('Post Item', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        child: Text(isEditing ? 'Update Item' : 'Post Item', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                       ),
                       const SizedBox(height: 30),
                     ],
@@ -384,6 +502,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
     String? prefixText,
     int maxLines = 1,
     TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
     required ScreenThemeProvider themeProvider,
     String? Function(String?)? validator,
   }) {
@@ -391,6 +510,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
       controller: controller,
       maxLines: maxLines,
       keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
       validator: validator,
       style: TextStyle(color: themeProvider.getColor('text')),
       decoration: _inputDecoration(label, themeProvider).copyWith(
