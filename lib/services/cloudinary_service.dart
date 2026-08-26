@@ -3,8 +3,8 @@ import 'package:cloudinary_public/cloudinary_public.dart';
 
 class CloudinaryService {
   // Replace these with your actual Cloudinary credentials from the dashboard
-  final String _cloudName = 'deq3it8ky'; // Placeholder, replace if known
-  final String _uploadPreset = 'whatsapp_clone_preset'; // Placeholder, replace if known
+  final String _cloudName = 'ddvvinsdr';
+  final String _uploadPreset = 'chat_app_uploads';
 
   Future<String?> uploadImage(XFile image) async {
     try {
