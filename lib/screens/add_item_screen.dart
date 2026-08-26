@@ -102,15 +102,17 @@ class _AddItemScreenState extends State<AddItemScreen> {
       }
 
       print('⏳ Starting item post process...');
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('⏳ Uploading photos...')));
-
+      
       // Upload main image
       print('📸 Uploading main image: ${_selectedImages[0].path}');
       final String? mainImageUrl = await _storageService.uploadImage(_selectedImages[0].path, 'marketplace');
       
-      if (mainImageUrl == null) {
+      if (mainImageUrl == null || mainImageUrl.isEmpty) {
         print('❌ Main image upload failed');
-        throw Exception("Failed to upload main image");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to upload image. Please check your connection.')));
+        }
+        return;
       }
 
       // Upload other images
@@ -118,7 +120,9 @@ class _AddItemScreenState extends State<AddItemScreen> {
       for (int i = 1; i < _selectedImages.length; i++) {
         print('📸 Uploading extra image $i: ${_selectedImages[i].path}');
         final url = await _storageService.uploadImage(_selectedImages[i].path, 'marketplace');
-        if (url != null) moreImageUrls.add(url);
+        if (url != null && url.isNotEmpty) {
+          moreImageUrls.add(url);
+        }
       }
 
       print('📝 Saving document to Firestore...');

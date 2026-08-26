@@ -380,32 +380,78 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         Navigator.push(context, MaterialPageRoute(builder: (context) => ItemDetailScreen(item: item)));
       },
       child: Container(
+        margin: const EdgeInsets.all(4),
         decoration: BoxDecoration(
           color: themeProvider.getColor('card'),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: themeProvider.getColor('textSecondary').withOpacity(0.1)),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 3, offset: const Offset(0, 1)),
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 5,
+              offset: const Offset(0, 2),
+            ),
           ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
+              flex: 3,
               child: Stack(
                 children: [
                   ClipRRect(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
-                    child: item.imageUrl.isNotEmpty
-                        ? Image.network(item.imageUrl, fit: BoxFit.cover, width: double.infinity,
-                            errorBuilder: (_, __, ___) => Container(color: Colors.grey.shade100, child: const Icon(Icons.image, color: Colors.grey, size: 20)))
-                        : Container(color: Colors.grey.shade100, child: const Icon(Icons.image, color: Colors.grey, size: 20)),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                    child: Hero(
+                      tag: 'item-image-${item.id}',
+                      child: item.imageUrl.isNotEmpty
+                          ? Image.network(
+                              item.imageUrl,
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              loadingBuilder: (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return Center(
+                                  child: CircularProgressIndicator(
+                                    value: loadingProgress.expectedTotalBytes != null
+                                        ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                        : null,
+                                    strokeWidth: 2,
+                                  ),
+                                );
+                              },
+                              errorBuilder: (_, __, ___) => Container(
+                                color: Colors.grey.shade100,
+                                child: const Icon(Icons.broken_image_outlined, color: Colors.grey, size: 30),
+                              ),
+                            )
+                          : Container(
+                              color: Colors.grey.shade100,
+                              child: const Icon(Icons.image_outlined, color: Colors.grey, size: 30),
+                            ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        item.category,
+                        style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                      ),
+                    ),
                   ),
                   if (item.isVerifiedSeller)
                     Positioned(
-                      top: 5,
-                      right: 5,
+                      top: 8,
+                      right: 8,
                       child: Container(
-                        padding: const EdgeInsets.all(2),
+                        padding: const EdgeInsets.all(3),
                         decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
                         child: const Icon(Icons.verified, color: Colors.blue, size: 14),
                       ),
@@ -413,31 +459,46 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(5),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '₦${item.price.toStringAsFixed(0)}',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: themeProvider.getColor('primary')),
-                  ),
-                  const SizedBox(height: 1),
-                  Text(
-                    item.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontWeight: FontWeight.w500, fontSize: 9, color: themeProvider.getColor('text')),
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      Icon(Icons.location_on, size: 7, color: themeProvider.getColor('textSecondary')),
-                      const SizedBox(width: 2),
-                      Expanded(child: Text(item.location, style: TextStyle(color: themeProvider.getColor('textSecondary'), fontSize: 7), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                    ],
-                  ),
-                ],
+            Expanded(
+              flex: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: themeProvider.getColor('text')),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '₦${item.price.toStringAsFixed(0)}',
+                          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: themeProvider.getColor('primary')),
+                        ),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        Icon(Icons.location_on_outlined, size: 10, color: themeProvider.getColor('textSecondary')),
+                        const SizedBox(width: 2),
+                        Expanded(
+                          child: Text(
+                            item.location,
+                            style: TextStyle(color: themeProvider.getColor('textSecondary'), fontSize: 10),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ],

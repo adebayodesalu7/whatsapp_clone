@@ -25,9 +25,24 @@ class CallsScreen extends StatelessWidget {
         backgroundColor: appBarColor,
         iconTheme: IconThemeData(color: themeProvider.getColor('appBarText')),
         actions: [
-          IconButton(icon: const Icon(Icons.camera_alt_outlined), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.search), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.more_vert), onPressed: () {}),
+          IconButton(
+            icon: const Icon(Icons.camera_alt_outlined), 
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Camera feature coming soon')));
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.search), 
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Search calls coming soon')));
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.more_vert), 
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Settings coming soon')));
+            },
+          ),
         ],
       ),
       body: currentUser == null
@@ -84,9 +99,10 @@ class CallsScreen extends StatelessWidget {
                       builder: (context, userSnap) {
                         final userData = userSnap.data?.data() as Map<String, dynamic>?;
                         final name = userSnap.hasData ? (userData?['name'] ?? 'Contact') : '...';
+                        final profilePic = userData?['profilePic'];
 
                         return ListTile(
-                          leading: Avatar(name: name, size: 55),
+                          leading: Avatar(name: name, imageUrl: profilePic, size: 55),
                           title: Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
                           subtitle: Row(
                             children: [
@@ -119,7 +135,9 @@ class CallsScreen extends StatelessWidget {
               },
             ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {},
+        onPressed: () {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select contact to call')));
+        },
         backgroundColor: themeProvider.getColor('primary'),
         child: const Icon(Icons.add_call, color: Colors.white),
       ),
