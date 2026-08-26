@@ -1,0 +1,75 @@
+name: whatsapp_clone
+description: A WhatsApp-like chat application
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.0.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # UI & Core
+  cupertino_icons: ^1.0.8
+  provider: ^6.1.1
+  shared_preferences: ^2.2.2
+  intl: ^0.20.3
+  http: ^1.1.0
+
+  # Firebase
+  firebase_core: ^4.13.0
+  firebase_auth: ^6.5.7
+  cloud_firestore: ^6.8.0
+  firebase_storage: ^13.4.6
+
+  # Image & Media
+  image_picker: ^1.0.5
+  flutter_slidable: ^4.0.3
+  emoji_picker_flutter: 1.6.4
+
+  # Contacts & Permissions
+  flutter_contacts: 1.1.9+2
+  permission_handler: 11.4.0
+
+  # Cloudinary
+  cloudinary_public: ^0.23.1
+
+  # AI
+  google_generative_ai: ^0.4.3
+
+  # WebRTC / Calls
+  agora_rtc_engine: ^6.6.3
+  flutter_webrtc: ^1.5.2
+  wakelock_plus: ^1.5.2
+
+  # New Special Features
+  local_auth: ^2.3.0
+  geolocator: ^13.0.1
+  google_maps_flutter: ^2.10.0
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^6.0.4
+  audioplayers: ^6.1.0
+  audio_waveforms: ^1.0.5
+  google_mlkit_text_recognition: ^0.14.0
+  file_picker: ^8.1.7
+  url_launcher: ^6.3.1
+  giphy_get: ^3.6.1
+  web3dart: ^2.7.3
+  google_mlkit_translation: ^0.12.0
+  just_audio: ^0.9.42
+  uuid: ^4.3.3
+
+  # Country Picker
+  country_picker: ^2.0.20
+
+dependency_overrides:
+  ffi: ^2.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
