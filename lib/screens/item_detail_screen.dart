@@ -57,11 +57,17 @@ class ItemDetailScreen extends StatelessWidget {
               child: Hero(
                 tag: 'item-image-${item.id}',
                 child: item.imageUrl.isNotEmpty
-                    ? Image.network(
-                        item.imageUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.broken_image, size: 60)),
-                      )
+                    ? (item.imageUrl.startsWith('http')
+                        ? Image.network(
+                            item.imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.broken_image, size: 60)),
+                          )
+                        : Image.file(
+                            File(item.imageUrl.startsWith('file://') ? item.imageUrl.replaceFirst('file://', '') : item.imageUrl),
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.image_not_supported, size: 60)),
+                          ))
                     : const Center(child: Icon(Icons.image, size: 80, color: Colors.grey)),
               ),
             ),

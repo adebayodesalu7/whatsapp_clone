@@ -55,9 +55,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     return Scaffold(
       backgroundColor: scaffoldColor,
       appBar: AppBar(
-        title: Text('Titan Marketplace', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: themeProvider.getColor('appBarText'))),
+        title: Text('Marketplace', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: themeProvider.getColor('appBarText'))),
         backgroundColor: appBarColor,
-        iconTheme: IconThemeData(color: themeProvider.getColor('appBarText'), size: 18),
+        toolbarHeight: 40,
+        iconTheme: IconThemeData(color: themeProvider.getColor('appBarText'), size: 16),
         elevation: 0,
         actions: [
           IconButton(
@@ -72,13 +73,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         children: [
           // Advanced Search Hub
           Container(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
             color: appBarColor,
             child: Column(
               children: [
                 Container(
-                  height: 36,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  height: 32,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
                   decoration: BoxDecoration(
                     color: themeProvider.getColor('card').withOpacity(0.15),
                     borderRadius: BorderRadius.circular(8),
@@ -109,15 +110,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
                       _buildFilterBadge('Location', Icons.location_on_outlined, _selectedState != 'All', () => _showLocationFilter()),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 4),
                       _buildFilterBadge('Price', Icons.payments_outlined, _minPrice != null || _maxPrice != null, () => _showPriceFilter()),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 4),
                       _buildFilterBadge('Category', Icons.category_outlined, _selectedCategory != 'All', () => _showCategoryFilter()),
                     ],
                   ),
@@ -196,12 +197,12 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 }
 
                 return GridView.builder(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(4),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
-                    childAspectRatio: 0.82,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
+                    childAspectRatio: 0.85,
+                    crossAxisSpacing: 4,
+                    mainAxisSpacing: 4,
                   ),
                   itemCount: items.length,
                   itemBuilder: (context, index) {
@@ -236,22 +237,22 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Padding(
-              padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: Text('Featured Deals ✨', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blue)),
+              padding: EdgeInsets.fromLTRB(12, 8, 12, 4),
+              child: Text('Featured ✨', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.blue)),
             ),
             SizedBox(
-              height: 120,
+              height: 100,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
                 itemCount: promoted.length,
                 itemBuilder: (context, index) {
                   final item = MarketplaceItem.fromMap(promoted[index].id, promoted[index].data() as Map<String, dynamic>);
                   return GestureDetector(
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ItemDetailScreen(item: item))),
                     child: Container(
-                      width: 200,
-                      margin: const EdgeInsets.only(right: 12),
+                      width: 160,
+                      margin: const EdgeInsets.only(right: 8),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(10),
                         image: DecorationImage(image: NetworkImage(item.imageUrl), fit: BoxFit.cover),
@@ -405,36 +406,42 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     child: Hero(
                       tag: 'item-image-${item.id}',
                       child: item.imageUrl.isNotEmpty
-                          ? Image.network(
-                              item.imageUrl,
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              loadingBuilder: (context, child, loadingProgress) {
-                                if (loadingProgress == null) return child;
-                                return Center(
-                                  child: CircularProgressIndicator(
-                                    value: loadingProgress.expectedTotalBytes != null
-                                        ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                                        : null,
-                                    strokeWidth: 2,
-                                  ),
-                                );
-                              },
-                              errorBuilder: (context, error, stackTrace) {
-                                print('❌ Image Load Error for ${item.title}: $error');
-                                return Container(
-                                  color: Colors.grey.shade100,
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      const Icon(Icons.broken_image_outlined, color: Colors.grey, size: 30),
-                                      const SizedBox(height: 4),
-                                      Text('Error loading', style: TextStyle(color: Colors.grey, fontSize: 8)),
-                                    ],
-                                  ),
-                                );
-                              },
-                            )
+                          ? (item.imageUrl.startsWith('http') 
+                              ? Image.network(
+                                  item.imageUrl,
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  loadingBuilder: (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return Center(
+                                      child: CircularProgressIndicator(
+                                        value: loadingProgress.expectedTotalBytes != null
+                                            ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                            : null,
+                                        strokeWidth: 2,
+                                      ),
+                                    );
+                                  },
+                                  errorBuilder: (context, error, stackTrace) {
+                                    print('❌ Image Network Error for ${item.title}: $error');
+                                    return Container(
+                                      color: Colors.grey.shade100,
+                                      child: const Icon(Icons.broken_image_outlined, color: Colors.grey, size: 30),
+                                    );
+                                  },
+                                )
+                              : Image.file(
+                                  io.File(item.imageUrl.startsWith('file://') ? item.imageUrl.replaceFirst('file://', '') : item.imageUrl),
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    print('❌ Image File Error for ${item.title}: $error');
+                                    return Container(
+                                      color: Colors.grey.shade100,
+                                      child: const Icon(Icons.image_not_supported_outlined, color: Colors.grey, size: 30),
+                                    );
+                                  },
+                                ))
                           : Container(
                               color: Colors.grey.shade100,
                               child: const Icon(Icons.image_outlined, color: Colors.grey, size: 30),

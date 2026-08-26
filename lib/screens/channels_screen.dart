@@ -69,20 +69,20 @@ class ChannelsScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 'Titan Elite Communities',
-                style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: -0.5),
+                style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: -0.4),
               ),
-              Icon(Icons.hub_outlined, color: themeProvider.getColor('primary'), size: 20),
+              Icon(Icons.hub_outlined, color: themeProvider.getColor('primary'), size: 16),
             ],
           ),
         ),
         SizedBox(
-          height: 150,
+          height: 120,
           child: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('communities').snapshots(),
             builder: (context, snapshot) {
@@ -106,12 +106,12 @@ class ChannelsScreen extends StatelessWidget {
                   return GestureDetector(
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => CommunityDetailScreen(communityId: communities[index].id))),
                     child: Container(
-                      width: 110,
-                      margin: const EdgeInsets.only(right: 16),
-                      padding: const EdgeInsets.all(8),
+                      width: 90,
+                      margin: const EdgeInsets.only(right: 12),
+                      padding: const EdgeInsets.all(4),
                       decoration: BoxDecoration(
                         color: themeProvider.getColor('primary').withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(15),
+                        borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: themeProvider.getColor('primary').withOpacity(0.1)),
                       ),
                       child: Column(
@@ -120,25 +120,24 @@ class ChannelsScreen extends StatelessWidget {
                           Stack(
                             alignment: Alignment.center,
                             children: [
-                              Avatar(name: name, size: 70, isTitanElite: true),
+                              Avatar(name: name, size: 55, isTitanElite: true),
                               Positioned(
-                                bottom: -2,
+                                bottom: -1,
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                                   decoration: BoxDecoration(
                                     color: Colors.amber.shade800,
-                                    borderRadius: BorderRadius.circular(10),
-                                    boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
-                                  child: const Text('TITAN', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+                                  child: const Text('TITAN', style: TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.bold)),
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 6),
                           Text(
                             name, 
-                            style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w900), 
+                            style: TextStyle(color: textColor, fontSize: 11, fontWeight: FontWeight.bold), 
                             overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.center,
                           ),
@@ -170,23 +169,23 @@ class ChannelsScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+          padding: const EdgeInsets.fromLTRB(12, 16, 12, 4),
           child: Text(
             'Trending Channels',
-            style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold),
+            style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.bold),
           ),
         ),
         const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 2),
           child: Text(
-            'Follow channels to get the latest updates from your favorite creators and businesses.',
-            style: TextStyle(color: Colors.grey, fontSize: 12),
+            'Follow channels for updates.',
+            style: TextStyle(color: Colors.grey, fontSize: 10),
           ),
         ),
         StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance.collection('channels').snapshots(),
           builder: (context, snapshot) {
-            if (!snapshot.hasData) return const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator()));
+            if (!snapshot.hasData) return const Padding(padding: EdgeInsets.all(12), child: Center(child: CircularProgressIndicator()));
             
             final channels = snapshot.data!.docs;
             
@@ -194,7 +193,7 @@ class ChannelsScreen extends StatelessWidget {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: channels.length,
-              separatorBuilder: (context, index) => Divider(indent: 80, height: 1, color: secondaryTextColor.withOpacity(0.05)),
+              separatorBuilder: (context, index) => Divider(indent: 64, height: 1, color: secondaryTextColor.withOpacity(0.05)),
               itemBuilder: (context, index) {
                 final data = channels[index].data() as Map<String, dynamic>;
                 final name = data['name'] ?? 'Channel';
@@ -208,16 +207,16 @@ class ChannelsScreen extends StatelessWidget {
                 final isAdmin = currentUser != null && (admins.contains(currentUser.uid) || data['createdBy'] == currentUser.uid);
 
                 return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  leading: Avatar(name: name, imageUrl: icon, size: 55),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                  leading: Avatar(name: name, imageUrl: icon, size: 45),
                   title: Row(
                     children: [
-                      Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: textColor, fontSize: 16)),
+                      Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: textColor, fontSize: 14)),
                       if (isAdmin) const SizedBox(width: 4),
-                      if (isAdmin) Icon(Icons.verified, color: themeProvider.getColor('primary'), size: 16),
+                      if (isAdmin) Icon(Icons.verified, color: themeProvider.getColor('primary'), size: 14),
                     ],
                   ),
-                  subtitle: Text('$followersCount followers', style: TextStyle(color: secondaryTextColor, fontSize: 13)),
+                  subtitle: Text('$followersCount followers', style: TextStyle(color: secondaryTextColor, fontSize: 11)),
                   trailing: ElevatedButton(
                     onPressed: () {
                       ChatService().toggleFollowChannel(channelId, !isFollowing);
@@ -226,10 +225,11 @@ class ChannelsScreen extends StatelessWidget {
                       backgroundColor: isFollowing ? Colors.grey.withOpacity(0.1) : themeProvider.getColor('primary').withOpacity(0.1),
                       foregroundColor: isFollowing ? textColor : themeProvider.getColor('primary'),
                       elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      minimumSize: const Size(0, 32),
                     ),
-                    child: Text(isFollowing ? 'Following' : 'Follow', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    child: Text(isFollowing ? 'Following' : 'Follow', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
                   ),
                   onTap: () {
                     Navigator.push(

@@ -26,9 +26,9 @@ final List<ChatBackground> chatBackgrounds = [
 class ScreenThemeProvider extends ChangeNotifier {
   bool _isDarkMode = false;
   bool _isOLEDMode = false;
-  double _fontSize = 16.0;
+  double _fontSize = 14.0;
   int _wallpaperIndex = 0;
-  double _bubbleRadius = 15.0;
+  double _bubbleRadius = 10.0;
   int _chatBackgroundIndex = 0;
   bool _isAppLockEnabled = false;
   bool _isBusinessBotEnabled = false;
@@ -56,9 +56,9 @@ class ScreenThemeProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     _isDarkMode = prefs.getBool('isDarkMode') ?? false;
     _isOLEDMode = prefs.getBool('isOLEDMode') ?? false;
-    _fontSize = prefs.getDouble('fontSize') ?? 16.0;
+    _fontSize = prefs.getDouble('fontSize') ?? 14.0;
     _wallpaperIndex = prefs.getInt('wallpaperIndex') ?? 0;
-    _bubbleRadius = prefs.getDouble('bubbleRadius') ?? 15.0;
+    _bubbleRadius = prefs.getDouble('bubbleRadius') ?? 10.0;
     _chatBackgroundIndex = prefs.getInt('chatBackgroundIndex') ?? 0;
     _isAppLockEnabled = prefs.getBool('isAppLockEnabled') ?? false;
     _isBusinessBotEnabled = prefs.getBool('isBusinessBotEnabled') ?? false;

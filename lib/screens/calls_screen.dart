@@ -81,7 +81,7 @@ class CallsScreen extends StatelessWidget {
                 }
 
                 return ListView.builder(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  padding: const EdgeInsets.symmetric(vertical: 4),
                   itemCount: calls.length,
                   itemBuilder: (context, index) {
                     final data = calls[index].data() as Map<String, dynamic>;
@@ -108,7 +108,7 @@ class CallsScreen extends StatelessWidget {
                         }
 
                         return ListTile(
-                          leading: Avatar(name: name, imageUrl: photoUrl, size: 55),
+                          leading: Avatar(name: name, imageUrl: photoUrl, size: 45),
                           title: Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
                           subtitle: Row(
                             children: [

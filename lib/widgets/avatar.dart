@@ -11,7 +11,7 @@ class Avatar extends StatefulWidget {
     super.key,
     required this.name,
     this.imageUrl,
-    this.size = 50,
+    this.size = 44,
     this.isTitanElite = false,
   });
 

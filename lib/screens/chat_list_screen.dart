@@ -165,7 +165,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
     return Scaffold(
       backgroundColor: scaffoldColor,
       appBar: AppBar(
-        title: Text('Chats', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: themeProvider.getColor('appBarText'))),
+        title: Text('Chats', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: themeProvider.getColor('appBarText'))),
         backgroundColor: appBarColor,
         iconTheme: IconThemeData(color: themeProvider.getColor('appBarText')),
         actions: [
@@ -195,14 +195,14 @@ class _ChatListScreenState extends State<ChatListScreen> {
         : ListView(
             children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
             child: Text(
               'GROUPS',
               style: TextStyle(
                 color: secondaryTextColor,
                 fontWeight: FontWeight.bold,
-                fontSize: 12,
-                letterSpacing: 1.2,
+                fontSize: 10,
+                letterSpacing: 1.0,
               ),
             ),
           ),
@@ -217,17 +217,17 @@ class _ChatListScreenState extends State<ChatListScreen> {
               }
               final groups = snapshot.data!.docs;
               return SizedBox(
-                height: 110,
+                height: 90,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   itemCount: groups.length,
                   itemBuilder: (context, index) {
                     final data = groups[index].data() as Map<String, dynamic>;
                     final name = data['name'] ?? 'Group';
                     final photoUrl = data['photoUrl'];
                     return Padding(
-                      padding: const EdgeInsets.only(right: 20.0),
+                      padding: const EdgeInsets.only(right: 12.0),
                       child: GestureDetector(
                         onTap: () {
                           Navigator.push(
@@ -243,12 +243,12 @@ class _ChatListScreenState extends State<ChatListScreen> {
                         },
                         child: Column(
                           children: [
-                            Avatar(name: name, imageUrl: photoUrl, size: 65),
-                            const SizedBox(height: 8),
+                            Avatar(name: name, imageUrl: photoUrl, size: 55),
+                            const SizedBox(height: 4),
                             Text(
                               name,
                               style: TextStyle(
-                                fontSize: 12, 
+                                fontSize: 11, 
                                 fontWeight: FontWeight.w500,
                                 color: textColor,
                               ),
@@ -323,7 +323,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
                   if (otherUserId.isEmpty) {
                     return ListTile(
-                      leading: Avatar(name: 'You', size: 50),
+                      leading: Avatar(name: 'You', size: 45),
                       title: Text('Note to Self', style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
                       subtitle: Text(data['lastMessage'] ?? '', style: TextStyle(color: secondaryTextColor)),
                       onTap: () {
@@ -352,7 +352,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                         return ListTile(
                           leading: Stack(
                             children: [
-                              Avatar(name: name, imageUrl: photoUrl, size: 50, isTitanElite: isTitanElite),
+                              Avatar(name: name, imageUrl: photoUrl, size: 45, isTitanElite: isTitanElite),
                               Positioned(
                                 right: 0,
                                 bottom: 0,
@@ -396,7 +396,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       final timeStr = lastTime != null ? "${lastTime.hour.toString().padLeft(2, '0')}:${lastTime.minute.toString().padLeft(2, '0')}" : '';
 
                       return ListTile(
-                        leading: Avatar(name: name, imageUrl: photoUrl, size: 50, isTitanElite: isTitanElite),
+                        leading: Avatar(name: name, imageUrl: photoUrl, size: 45, isTitanElite: isTitanElite),
                         title: Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
                         subtitle: Row(
                           children: [

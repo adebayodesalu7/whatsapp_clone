@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../providers/screen_theme_provider.dart';
-import '../services/storage_service.dart';
+import 'package:whatsapp_clone/services/cloudinary_service.dart';
 import 'package:geolocator/geolocator.dart';
 
 class AddItemScreen extends StatefulWidget {
@@ -32,7 +32,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
   String _selectedCategory = 'Cars';
   final ImagePicker _picker = ImagePicker();
-  final StorageService _storageService = StorageService();
+  final CloudinaryService _cloudinaryService = CloudinaryService();
   List<XFile> _selectedImages = [];
   bool _isLoading = false;
   Position? _currentPosition;
@@ -98,19 +98,22 @@ class _AddItemScreenState extends State<AddItemScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         print('❌ No user logged in');
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please login to post items.')));
         return;
       }
 
       print('⏳ Starting item post process...');
       
       // Upload main image
-      print('📸 Uploading main image: ${_selectedImages[0].path}');
-      final String? mainImageUrl = await _storageService.uploadImage(_selectedImages[0].path, 'marketplace');
+      print('📸 Uploading main image to Cloudinary: ${_selectedImages[0].path}');
+      final String? mainImageUrl = await _cloudinaryService.uploadImage(_selectedImages[0]);
       
       if (mainImageUrl == null || mainImageUrl.isEmpty) {
         print('❌ Main image upload failed');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to upload image. Please check your connection.')));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Upload failed. Please check your Cloudinary settings.'),
+          ));
         }
         return;
       }
@@ -118,8 +121,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
       // Upload other images
       List<String> moreImageUrls = [];
       for (int i = 1; i < _selectedImages.length; i++) {
-        print('📸 Uploading extra image $i: ${_selectedImages[i].path}');
-        final url = await _storageService.uploadImage(_selectedImages[i].path, 'marketplace');
+        print('📸 Uploading extra image $i to Cloudinary: ${_selectedImages[i].path}');
+        final url = await _cloudinaryService.uploadImage(_selectedImages[i]);
         if (url != null && url.isNotEmpty) {
           moreImageUrls.add(url);
         }
@@ -201,7 +204,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
           : Container(
               color: themeProvider.getColor('scaffold'),
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(12),
                 child: Form(
                   key: _formKey,
                   child: Column(
@@ -212,98 +215,97 @@ class _AddItemScreenState extends State<AddItemScreen> {
                         label: 'Title*',
                         hint: '0 / 70',
                         themeProvider: themeProvider,
-                        validator: (v) => v!.isEmpty ? 'This field is required.' : null,
+                        validator: (v) => v!.isEmpty ? 'Required' : null,
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
                         value: _selectedCategory,
                         dropdownColor: themeProvider.getColor('card'),
-                        style: TextStyle(color: textColor),
-                        items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                        style: TextStyle(color: textColor, fontSize: 13),
+                        items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c, style: const TextStyle(fontSize: 13)))).toList(),
                         onChanged: (val) => setState(() => _selectedCategory = val!),
                         decoration: _inputDecoration('Category*', themeProvider),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
                         value: _selectedState,
                         dropdownColor: themeProvider.getColor('card'),
-                        style: TextStyle(color: textColor),
-                        items: _nigerianStates.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                        style: TextStyle(color: textColor, fontSize: 13),
+                        items: _nigerianStates.map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 13)))).toList(),
                         onChanged: (val) => setState(() => _selectedState = val!),
-                        decoration: _inputDecoration('State of Sale*', themeProvider),
+                        decoration: _inputDecoration('State*', themeProvider),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 10),
                       ElevatedButton.icon(
                         onPressed: _getCurrentLocation,
-                        icon: Icon(Icons.my_location, color: _currentPosition != null ? Colors.green : Colors.white70),
-                        label: Text(_currentPosition != null ? 'Location Captured' : 'Tag GPS Location (Optional)'),
+                        icon: Icon(Icons.my_location, size: 16, color: _currentPosition != null ? Colors.green : Colors.white70),
+                        label: Text(_currentPosition != null ? 'Captured' : 'Tag GPS', style: const TextStyle(fontSize: 12)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.blueGrey,
                           foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
-                      const SizedBox(height: 24),
-                      Text('Add Photos', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
-                      const SizedBox(height: 8),
-                      Text('First picture is the title picture.', 
-                        style: TextStyle(color: themeProvider.getColor('primary'), fontSize: 13)),
                       const SizedBox(height: 16),
+                      Text('Photos', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor)),
+                      const SizedBox(height: 4),
+                      Text('First picture is the title.', 
+                        style: TextStyle(color: themeProvider.getColor('primary'), fontSize: 11)),
+                      const SizedBox(height: 10),
                       _buildImagePicker(themeProvider.getColor('card'), secondaryColor, themeProvider),
-                      const SizedBox(height: 8),
-                      Text('Supported formats are *.jpg and *.png', style: TextStyle(color: secondaryColor, fontSize: 12)),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
                       _buildTextField(
                         controller: _videoUrlController,
-                        label: 'Video Link (Optional)',
+                        label: 'Video Link',
                         themeProvider: themeProvider,
                       ),
                       if (_selectedCategory == 'Cars') ...[
-                        const SizedBox(height: 24),
-                        Text('Vehicle Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
                         const SizedBox(height: 16),
+                        Text('Vehicle Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor)),
+                        const SizedBox(height: 10),
                         _buildTextField(controller: _brandController, label: 'Brand', themeProvider: themeProvider),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
                         _buildTextField(controller: _modelController, label: 'Model', themeProvider: themeProvider),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
                         _buildTextField(controller: _yearController, label: 'Year', themeProvider: themeProvider, keyboardType: TextInputType.number),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
                         Row(
                           children: [
-                            Expanded(child: _buildTextField(controller: _fuelController, label: 'Fuel', hint: 'Petrol/Diesel', themeProvider: themeProvider)),
-                            const SizedBox(width: 12),
-                            Expanded(child: _buildTextField(controller: _transController, label: 'Transmission', hint: 'Auto/Manual', themeProvider: themeProvider)),
+                            Expanded(child: _buildTextField(controller: _fuelController, label: 'Fuel', themeProvider: themeProvider)),
+                            const SizedBox(width: 8),
+                            Expanded(child: _buildTextField(controller: _transController, label: 'Transmission', themeProvider: themeProvider)),
                           ],
                         ),
                       ],
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
                       _buildTextField(
                         controller: _priceController,
                         label: 'Price (₦)*',
                         keyboardType: TextInputType.number,
                         themeProvider: themeProvider,
-                        validator: (v) => v!.isEmpty ? 'Price is required.' : null,
+                        validator: (v) => v!.isEmpty ? 'Required' : null,
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 10),
                       _buildTextField(
                         controller: _descriptionController,
                         label: 'Description',
-                        maxLines: 4,
+                        maxLines: 3,
                         themeProvider: themeProvider,
                       ),
-                      const SizedBox(height: 30),
+                      const SizedBox(height: 20),
                       ElevatedButton(
                         onPressed: _isLoading ? null : _postItem,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: themeProvider.getColor('primary'),
                           foregroundColor: Colors.white,
-                          minimumSize: const Size(double.infinity, 54),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          elevation: 2,
+                          minimumSize: const Size(double.infinity, 44),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          elevation: 1,
                         ),
-                        child: const Text('Post Item', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        child: const Text('Post Item', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                       ),
-                      const SizedBox(height: 50),
+                      const SizedBox(height: 30),
                     ],
                   ),
                 ),
@@ -314,17 +316,17 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
   Widget _buildImagePicker(Color cardColor, Color secondaryColor, ScreenThemeProvider themeProvider) {
     return Wrap(
-      spacing: 10,
-      runSpacing: 10,
+      spacing: 8,
+      runSpacing: 8,
       children: [
         ..._selectedImages.asMap().entries.map((entry) {
           return Stack(
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(8),
                 child: io.File(entry.value.path).existsSync()
-                  ? Image.file(io.File(entry.value.path), width: 100, height: 100, fit: BoxFit.cover)
-                  : Container(width: 100, height: 100, color: secondaryColor.withOpacity(0.1), child: Icon(Icons.image, color: secondaryColor)),
+                  ? Image.file(io.File(entry.value.path), width: 80, height: 80, fit: BoxFit.cover)
+                  : Container(width: 80, height: 80, color: secondaryColor.withOpacity(0.1), child: Icon(Icons.image, color: secondaryColor)),
               ),
               Positioned(
                 right: 0,
@@ -332,8 +334,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
                   onTap: () => setState(() => _selectedImages.removeAt(entry.key)),
                   child: Container(
                     decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                    padding: const EdgeInsets.all(4),
-                    child: const Icon(Icons.close, color: Colors.white, size: 16),
+                    padding: const EdgeInsets.all(3),
+                    child: const Icon(Icons.close, color: Colors.white, size: 14),
                   ),
                 ),
               ),
@@ -343,14 +345,14 @@ class _AddItemScreenState extends State<AddItemScreen> {
         GestureDetector(
           onTap: _pickImages,
           child: Container(
-            width: 100,
-            height: 100,
+            width: 80,
+            height: 80,
             decoration: BoxDecoration(
               color: themeProvider.getColor('primary').withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(8),
               border: Border.all(color: themeProvider.getColor('primary').withOpacity(0.3)),
             ),
-            child: Icon(Icons.add_a_photo_outlined, color: themeProvider.getColor('primary'), size: 32),
+            child: Icon(Icons.add_a_photo_outlined, color: themeProvider.getColor('primary'), size: 24),
           ),
         ),
       ],
@@ -360,18 +362,18 @@ class _AddItemScreenState extends State<AddItemScreen> {
   InputDecoration _inputDecoration(String label, ScreenThemeProvider themeProvider) {
     return InputDecoration(
       labelText: label,
-      labelStyle: TextStyle(color: themeProvider.getColor('textSecondary')),
+      labelStyle: TextStyle(color: themeProvider.getColor('textSecondary'), fontSize: 13),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: themeProvider.getColor('textSecondary').withOpacity(0.3)),
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: themeProvider.getColor('textSecondary').withOpacity(0.2)),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         borderSide: BorderSide(color: themeProvider.getColor('primary')),
       ),
       filled: true,
       fillColor: themeProvider.getColor('card'),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
     );
   }
 
