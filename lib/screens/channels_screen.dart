@@ -82,7 +82,7 @@ class ChannelsScreen extends StatelessWidget {
           ),
         ),
         SizedBox(
-          height: 140,
+          height: 150,
           child: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('communities').snapshots(),
             builder: (context, snapshot) {
@@ -106,15 +106,39 @@ class ChannelsScreen extends StatelessWidget {
                   return GestureDetector(
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => CommunityDetailScreen(communityId: communities[index].id))),
                     child: Container(
-                      width: 100,
+                      width: 110,
                       margin: const EdgeInsets.only(right: 16),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: themeProvider.getColor('primary').withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: themeProvider.getColor('primary').withOpacity(0.1)),
+                      ),
                       child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Avatar(name: name, size: 75, isTitanElite: true),
-                          const SizedBox(height: 10),
+                          Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Avatar(name: name, size: 70, isTitanElite: true),
+                              Positioned(
+                                bottom: -2,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.shade800,
+                                    borderRadius: BorderRadius.circular(10),
+                                    boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                                  ),
+                                  child: const Text('TITAN', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
                           Text(
                             name, 
-                            style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.bold), 
+                            style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w900), 
                             overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.center,
                           ),

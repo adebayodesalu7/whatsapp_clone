@@ -420,10 +420,20 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                                   ),
                                 );
                               },
-                              errorBuilder: (_, __, ___) => Container(
-                                color: Colors.grey.shade100,
-                                child: const Icon(Icons.broken_image_outlined, color: Colors.grey, size: 30),
-                              ),
+                              errorBuilder: (context, error, stackTrace) {
+                                print('❌ Image Load Error for ${item.title}: $error');
+                                return Container(
+                                  color: Colors.grey.shade100,
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.broken_image_outlined, color: Colors.grey, size: 30),
+                                      const SizedBox(height: 4),
+                                      Text('Error loading', style: TextStyle(color: Colors.grey, fontSize: 8)),
+                                    ],
+                                  ),
+                                );
+                              },
                             )
                           : Container(
                               color: Colors.grey.shade100,

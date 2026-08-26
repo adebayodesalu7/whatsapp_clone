@@ -126,6 +126,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
       }
 
       print('📝 Saving document to Firestore...');
+      
       Map<String, String> specs = {};
       if (_selectedCategory == 'Cars') {
         specs = {
@@ -134,7 +135,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
         };
       }
 
-      await FirebaseFirestore.instance.collection('marketplace_items').add({
+      final itemData = {
         'sellerId': user.uid,
         'title': _titleController.text,
         'price': double.tryParse(_priceController.text) ?? 0.0,
@@ -153,7 +154,11 @@ class _AddItemScreenState extends State<AddItemScreen> {
         'createdAt': FieldValue.serverTimestamp(),
         'isPromoted': false,
         'isVerifiedSeller': false,
-      });
+      };
+
+      print('DEBUG: Item Data to save: $itemData');
+
+      await FirebaseFirestore.instance.collection('marketplace_items').add(itemData);
 
       print('✅ Item listed successfully!');
       if (mounted) {

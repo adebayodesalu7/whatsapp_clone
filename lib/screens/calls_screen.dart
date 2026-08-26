@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
+import 'package:whatsapp_clone/screens/contacts_screen.dart';
 import '../widgets/avatar.dart';
 import '../providers/screen_theme_provider.dart';
 
@@ -97,12 +98,17 @@ class CallsScreen extends StatelessWidget {
                     return FutureBuilder<DocumentSnapshot>(
                       future: FirebaseFirestore.instance.collection('users').doc(otherUserId).get(),
                       builder: (context, userSnap) {
-                        final userData = userSnap.data?.data() as Map<String, dynamic>?;
-                        final name = userSnap.hasData ? (userData?['name'] ?? 'Contact') : '...';
-                        final profilePic = userData?['profilePic'];
+                        String name = 'Contact';
+                        String? photoUrl;
+                        
+                        if (userSnap.hasData && userSnap.data!.exists) {
+                          final userData = userSnap.data!.data() as Map<String, dynamic>;
+                          name = userData['name'] ?? 'Contact';
+                          photoUrl = userData['photoUrl'];
+                        }
 
                         return ListTile(
-                          leading: Avatar(name: name, imageUrl: profilePic, size: 55),
+                          leading: Avatar(name: name, imageUrl: photoUrl, size: 55),
                           title: Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
                           subtitle: Row(
                             children: [
@@ -136,7 +142,10 @@ class CallsScreen extends StatelessWidget {
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select contact to call')));
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => ContactsScreen()),
+          );
         },
         backgroundColor: themeProvider.getColor('primary'),
         child: const Icon(Icons.add_call, color: Colors.white),
