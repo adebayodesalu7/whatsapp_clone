@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/screen_theme_provider.dart';
 import '../services/payment_service.dart';
+import '../services/paystack_service.dart';
 import 'ajo_dashboard_screen.dart';
 
 class AjoGroupScreen extends StatefulWidget {
@@ -96,15 +97,31 @@ class _AjoGroupScreenState extends State<AjoGroupScreen> {
                   };
 
                   if (editGroup == null) {
+                    final user = FirebaseAuth.instance.currentUser;
+                    String email = user?.email ?? '${user?.phoneNumber?.replaceAll('+', '') ?? 'user'}@titan-ajo.com';
+
+                    final paystackService = PaystackService();
+                    
+                    // Show a sub-loading for account generation
+                    showDialog(
+                      context: context, 
+                      barrierDismissible: false, 
+                      builder: (c) => const Center(child: CircularProgressIndicator())
+                    );
+
+                    final accountDetails = await paystackService.createDedicatedAccount(nameController.text, email);
+                    
+                    if (mounted) Navigator.pop(context); // Close sub-loading
+
                     await _firestore.collection('ajo_groups').add({
                       ...ajoData,
                       'creatorId': _currentUserId,
                       'members': [_currentUserId],
                       'payoutStatus': {_currentUserId: false},
                       'createdAt': FieldValue.serverTimestamp(),
-                      'bankName': 'Titan Microfinance Bank',
-                      'accountNumber': '9902' + (DateTime.now().millisecondsSinceEpoch % 1000000).toString().padLeft(6, '0'),
-                      'accountName': 'Titan Ajo: ' + nameController.text,
+                      'bankName': accountDetails['bankName'],
+                      'accountNumber': accountDetails['accountNumber'],
+                      'accountName': accountDetails['accountName'],
                       'currentTurnIndex': 0,
                     });
                   } else {
@@ -250,13 +267,53 @@ class _AjoGroupScreenState extends State<AjoGroupScreen> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     onPressed: () async {
-                      final paymentService = PaymentService();
-                      final success = await paymentService.contributeToAjo(group.name, group.contributionAmount);
-                      
-                      if (success) {
+                      final user = FirebaseAuth.instance.currentUser;
+                      if (user == null) return;
+
+                      String? email = user.email;
+                      if (email == null || email.isEmpty) {
+                        final userDoc = await _firestore.collection('users').doc(_currentUserId).get();
+                        final phoneNumber = userDoc.data()?['phoneNumber'] as String? ?? '';
+                        if (phoneNumber.isNotEmpty) {
+                          email = '${phoneNumber.replaceAll('+', '')}@titan-ajo.com';
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Phone number not found.')));
+                          return;
+                        }
+                      }
+
+                      final paystackService = PaystackService();
+                      final reference = paystackService.generateReference();
+
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (context) => const Center(child: CircularProgressIndicator()),
+                      );
+
+                      final response = await paystackService.checkout(
+                        context: context,
+                        email: email,
+                        amount: group.contributionAmount,
+                        reference: reference,
+                      );
+
+                      if (mounted) Navigator.pop(context); // Close loading
+
+                      if (response != null && response['status'] == true) {
                         await _firestore.collection('ajo_groups').doc(group.id).update({
                           'payoutStatus.$_currentUserId': true,
                         });
+
+                        // Record contribution
+                        await _firestore.collection('ajo_groups').doc(group.id).collection('contributions').add({
+                          'userId': _currentUserId,
+                          'userName': user.displayName ?? 'Member',
+                          'amount': group.contributionAmount,
+                          'reference': reference,
+                          'timestamp': FieldValue.serverTimestamp(),
+                        });
+
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(content: Text('Contribution of ₦${group.contributionAmount} successful!')),
@@ -265,7 +322,7 @@ class _AjoGroupScreenState extends State<AjoGroupScreen> {
                       } else {
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Insufficient wallet balance!'), backgroundColor: Colors.red),
+                            SnackBar(content: Text(response?['message'] ?? 'Payment failed or cancelled'), backgroundColor: Colors.red),
                           );
                         }
                       }

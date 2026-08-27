@@ -1,12 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:whatsapp_clone/models/models.dart';
+import 'paystack_service.dart';
 
 class EscrowService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  
-  static const String paystackPublicKey = "pk_test_943913769cffce5c72ebbbbc703a825abe508c1d";
-  static const String paystackSecretKey = "sk_test_dece568d838425c9ca1d3db8b18654fc9d1c2098";
+  final PaystackService _paystackService = PaystackService();
 
   Future<bool> processPaystackPayment(BuildContext context, {
     required String email,
@@ -15,11 +14,22 @@ class EscrowService {
     required Function(String) onSuccess,
   }) async {
     try {
-      print("💳 [Simulated] Processing Paystack payment of ₦$amount...");
-      // For the demo build to work without package issues, we simulate success
-      await Future.delayed(const Duration(seconds: 2));
-      await onSuccess(reference);
-      return true;
+      final response = await _paystackService.checkout(
+        context: context,
+        email: email,
+        amount: amount,
+        reference: reference,
+      );
+
+      if (response != null && response['status'] == true) {
+        await onSuccess(reference);
+        return true;
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(response?['message'] ?? 'Payment failed'), backgroundColor: Colors.red),
+        );
+        return false;
+      }
     } catch (e) {
       print("❌ Paystack Error: $e");
       return false;

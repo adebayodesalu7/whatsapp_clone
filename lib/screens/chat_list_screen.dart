@@ -136,9 +136,30 @@ class _ChatListScreenState extends State<ChatListScreen> {
             ListTile(
               leading: const Icon(Icons.delete_outline, color: Colors.red),
               title: const Text('Delete Chat', style: TextStyle(color: Colors.red)),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                // Implementation for delete
+                final bool? confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Delete Chat?'),
+                    content: const Text('Are you sure you want to delete this chat and all its messages? This action cannot be undone.'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('CANCEL')),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('DELETE', style: TextStyle(color: Colors.red)),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (confirm == true) {
+                  final chatService = ChatService();
+                  await chatService.deleteChat(chatId);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Chat deleted')));
+                  }
+                }
               },
             ),
           ],

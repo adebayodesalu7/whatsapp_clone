@@ -27,7 +27,7 @@ class _AIConciergeScreenState extends State<AIConciergeScreen> {
     });
 
     // Simulate AI interpreting the request
-    final response = await _aiService.getBusinessAutoReply(userText, 'Marketplace Shopper');
+    final response = await _aiService.getBusinessAutoReply(userText);
     
     setState(() {
       _messages.add({'isMe': false, 'text': "🧠 [Titan interpretation]: Searching for products matching '$userText'...\n\n$response"});

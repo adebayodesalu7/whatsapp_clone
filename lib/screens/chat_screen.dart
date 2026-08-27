@@ -42,6 +42,7 @@ import 'ajo_dashboard_screen.dart';
 import 'group_settings_screen.dart';
 import 'games_screen.dart';
 import 'titan_docs_screen.dart';
+import 'chat_media_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   final String receiverId;
@@ -79,6 +80,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   bool _isGhostMode = false;
   bool _isLocked = false;
   bool _isAutoPilotEnabled = false;
+
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = "";
 
   @override
   void initState() {
@@ -318,7 +323,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   'status': 'Pending',
                   'type': 'Standard',
                 };
-                _chatService.sendInvoiceMessage(widget.receiverId, invoice);
+                _chatService.sendInvoiceMessage(widget.receiverId, invoice, isGroup: widget.isGroup);
                 Navigator.pop(context);
               }
             },
@@ -395,36 +400,77 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   elevation: 0,
                   leadingWidth: 75,
                   leading: InkWell(
-                    onTap: () => Navigator.pop(context),
+                    onTap: () {
+                      if (_isSearching) {
+                        setState(() {
+                          _isSearching = false;
+                          _searchQuery = "";
+                          _searchController.clear();
+                        });
+                      } else {
+                        Navigator.pop(context);
+                      }
+                    },
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const SizedBox(width: 4),
                         const Icon(Icons.arrow_back, size: 22),
-                        const SizedBox(width: 2),
-                        Avatar(name: widget.contactName, imageUrl: photoUrl, size: 36, isTitanElite: isTitanElite),
+                        if (!_isSearching) ...[
+                          const SizedBox(width: 2),
+                          Avatar(name: widget.contactName, imageUrl: photoUrl, size: 36, isTitanElite: isTitanElite),
+                        ],
                       ],
                     ),
                   ),
                   titleSpacing: 0,
-                  title: InkWell(
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => ContactInfoScreen(contactId: widget.receiverId, contactName: widget.contactName, isGroup: widget.isGroup)));
-                    },
-                    child: Container(
-                      width: double.infinity,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(widget.contactName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                          Text(statusText, style: TextStyle(fontSize: 10, fontWeight: FontWeight.normal, color: statusText == 'typing...' ? Colors.greenAccent : Colors.white70)),
-                        ],
-                      ),
-                    ),
-                  ),
+                  title: _isSearching
+                      ? TextField(
+                          controller: _searchController,
+                          autofocus: true,
+                          style: const TextStyle(color: Colors.white, fontSize: 16),
+                          decoration: InputDecoration(
+                            hintText: 'Search...',
+                            hintStyle: const TextStyle(color: Colors.white70),
+                            border: InputBorder.none,
+                            suffixIcon: _searchQuery.isNotEmpty 
+                                ? IconButton(
+                                    icon: const Icon(Icons.close, color: Colors.white70),
+                                    onPressed: () {
+                                      setState(() {
+                                        _searchQuery = "";
+                                        _searchController.clear();
+                                      });
+                                    },
+                                  )
+                                : null,
+                          ),
+                          onChanged: (value) {
+                            setState(() {
+                              _searchQuery = value.toLowerCase();
+                            });
+                          },
+                        )
+                      : InkWell(
+                          onTap: () {
+                            Navigator.push(context, MaterialPageRoute(builder: (context) => ContactInfoScreen(contactId: widget.receiverId, contactName: widget.contactName, isGroup: widget.isGroup)));
+                          },
+                          child: Container(
+                            width: double.infinity,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(widget.contactName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                                Text(statusText, style: TextStyle(fontSize: 10, fontWeight: FontWeight.normal, color: statusText == 'typing...' ? Colors.greenAccent : Colors.white70)),
+                              ],
+                            ),
+                          ),
+                        ),
                   actions: [
-                    IconButton(icon: const Icon(Icons.videocam, size: 22), onPressed: () => _showComingSoonDialog(context, 'Video Call')),
-                    IconButton(icon: const Icon(Icons.call, size: 20), onPressed: () => _showComingSoonDialog(context, 'Voice Call')),
+                    if (!_isSearching) ...[
+                      IconButton(icon: const Icon(Icons.videocam, size: 22), onPressed: () => _showComingSoonDialog(context, 'Video Call')),
+                      IconButton(icon: const Icon(Icons.call, size: 20), onPressed: () => _showComingSoonDialog(context, 'Voice Call')),
+                    ],
                     PopupMenuButton<String>(
                       iconSize: 22,
                       onSelected: (value) {
@@ -442,7 +488,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                             _toggleChatLock();
                             break;
                           case 'mute':
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Notifications muted for 8 hours')));
+                            _showMuteDialog();
+                            break;
+                          case 'wallpaper':
+                            _showWallpaperDialog();
+                            break;
+                          case 'search':
+                            setState(() => _isSearching = true);
+                            break;
+                          case 'media':
+                            _showMediaDocs();
                             break;
                           case 'more':
                             _showMoreOptions(context);
@@ -518,7 +573,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                               if (mounted) _markMessagesAsRead();
                             });
 
-                            final messages = snapshot.data!.docs;
+                            final messages = snapshot.data!.docs.where((doc) {
+                              if (_searchQuery.isEmpty) return true;
+                              final data = doc.data() as Map<String, dynamic>;
+                              final type = data['type'] ?? 'text';
+                              if (type == 'text') {
+                                final text = data['message'] ?? '';
+                                return text.toString().toLowerCase().contains(_searchQuery);
+                              }
+                              return false;
+                            }).toList();
                             return ListView.builder(
                               reverse: true,
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
@@ -599,6 +663,80 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         ),
       ),
     );
+  }
+
+  void _showMuteDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Mute Notifications'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(title: const Text('8 Hours'), onTap: () => _muteChat(8)),
+            ListTile(title: const Text('1 Week'), onTap: () => _muteChat(168)),
+            ListTile(title: const Text('Always'), onTap: () => _muteChat(87600)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _muteChat(int hours) async {
+    final chatId = widget.isGroup ? widget.receiverId : _chatService.getChatId(_currentUserId!, widget.receiverId);
+    await _chatService.muteChat(chatId, hours);
+    Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Notifications muted for $hours hours')));
+  }
+
+  void _showWallpaperDialog() {
+    final themeProvider = Provider.of<ScreenThemeProvider>(context, listen: false);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).cardColor,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Choose Wallpaper', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            SizedBox(
+              height: 150,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: chatBackgrounds.length,
+                itemBuilder: (context, index) {
+                  final bg = chatBackgrounds[index];
+                  return GestureDetector(
+                    onTap: () {
+                      themeProvider.setChatBackground(index);
+                      Navigator.pop(context);
+                    },
+                    child: Container(
+                      width: 100,
+                      margin: const EdgeInsets.only(right: 12),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        gradient: bg.gradient,
+                        border: Border.all(color: themeProvider.chatBackgroundIndex == index ? Colors.green : Colors.transparent, width: 2),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(bg.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showMediaDocs() {
+     Navigator.push(context, MaterialPageRoute(builder: (context) => ChatMediaScreen(chatId: widget.isGroup ? widget.receiverId : _chatService.getChatId(_currentUserId!, widget.receiverId))));
   }
 
   Widget _buildPinnedMessagesBar(Color textColor) {
@@ -805,7 +943,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               if (type == 'video' && videoUrl != null)
                 _buildVideoThumbnail(videoUrl),
               if (type == 'voice') VoiceMessageWidget(audioUrl: data['audioUrl'], isMe: isMe, meColor: const Color(0xFFDCF8C6), otherColor: Colors.white),
-              if (type == 'ajo_invitation') _buildAjoInvitationBubble(data['metadata'] ?? {}, isMe, themeProvider),
+              if (type == 'ajo_invitation') _buildAjoInvitationBubble(messageId, data['metadata'] ?? {}, isMe, themeProvider),
               if (type == 'invoice') _buildInvoiceBubble(data['metadata'] ?? {}, isMe, messageId, const Color(0xFFDCF8C6), Colors.white, Colors.black87),
               const SizedBox(height: 4),
               Row(
@@ -894,54 +1032,93 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildAjoInvitationBubble(Map<String, dynamic> data, bool isMe, ScreenThemeProvider theme) {
-    return Container(
-      width: 250,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isMe ? const Color(0xFFDCF8C6) : Colors.blue.shade50,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.blue.withOpacity(0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+  Widget _buildAjoInvitationBubble(String messageId, Map<String, dynamic> data, bool isMe, ScreenThemeProvider theme) {
+    final bool isExpired = data['isUsed'] ?? false;
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('ajo_groups').doc(data['id']).snapshots(),
+      builder: (context, snapshot) {
+        bool isJoined = false;
+        if (snapshot.hasData && snapshot.data!.exists) {
+          final groupData = snapshot.data!.data() as Map<String, dynamic>;
+          final members = List<String>.from(groupData['members'] ?? []);
+          isJoined = members.contains(_currentUserId);
+        }
+
+        return Container(
+          width: 250,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isMe ? const Color(0xFFDCF8C6) : (isExpired ? Colors.grey.shade200 : Colors.blue.shade50),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: isExpired ? Colors.grey : Colors.blue.withOpacity(0.3)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.mail_outline, color: Colors.blue),
-              const SizedBox(width: 8),
-              Text('Ajo Invitation', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue.shade800)),
+              Row(
+                children: [
+                  Icon(isExpired ? Icons.history : Icons.mail_outline, color: isExpired ? Colors.grey : Colors.blue),
+                  const SizedBox(width: 8),
+                  Text(isExpired ? 'Invitation Expired' : 'Ajo Invitation', 
+                    style: TextStyle(fontWeight: FontWeight.bold, color: isExpired ? Colors.grey : Colors.blue.shade800)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(isExpired ? 'This invitation has already been used.' : 'You have been invited to join ${data['name']}', 
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: isExpired ? Colors.grey : Colors.black87)),
+              if (!isExpired) ...[
+                const SizedBox(height: 8),
+                Text('Amount: ₦${data['contributionAmount']} / ${data['frequencyType']}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+              ],
+              const SizedBox(height: 16),
+              if (!isMe)
+                ElevatedButton(
+                  onPressed: isExpired ? null : () => _acceptInvitation(messageId, data),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isJoined ? Colors.green : (isExpired ? Colors.grey : Colors.blue),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 36),
+                    elevation: 0,
+                  ),
+                  child: Text(isExpired ? 'Used' : (isJoined ? 'Open Dashboard' : 'Accept & Join')),
+                ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text('You have been invited to join ${data['name']}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-          const SizedBox(height: 8),
-          Text('Amount: ₦${data['contributionAmount']} / ${data['frequencyType']}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
-          const SizedBox(height: 16),
-          if (!isMe)
-            ElevatedButton(
-              onPressed: () => _acceptInvitation(data),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 36),
-                elevation: 0,
-              ),
-              child: const Text('Accept & Join'),
-            ),
-        ],
-      ),
+        );
+      }
     );
   }
 
-  void _acceptInvitation(Map<String, dynamic> data) async {
+  void _acceptInvitation(String messageId, Map<String, dynamic> data) async {
     final groupId = data['id'];
-    await FirebaseFirestore.instance.collection('ajo_groups').doc(groupId).update({
-      'members': FieldValue.arrayUnion([_currentUserId]),
-      'payoutStatus.$_currentUserId': false,
+    final doc = await FirebaseFirestore.instance.collection('ajo_groups').doc(groupId).get();
+    if (!doc.exists) return;
+
+    final members = List<String>.from(doc.data()?['members'] ?? []);
+    
+    if (!members.contains(_currentUserId)) {
+      await FirebaseFirestore.instance.collection('ajo_groups').doc(groupId).update({
+        'members': FieldValue.arrayUnion([_currentUserId]),
+        'payoutStatus.$_currentUserId': false,
+      });
+    }
+
+    // Mark invitation message as used/expired
+    final chatId = widget.isGroup ? widget.receiverId : _chatService.getChatId(_currentUserId!, widget.receiverId);
+    await FirebaseFirestore.instance
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .doc(messageId)
+        .update({
+      'metadata.isUsed': true,
     });
+
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Joined Ajo Group successfully!'), backgroundColor: Colors.green));
+      if (!members.contains(_currentUserId)) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Joined Ajo Group successfully!'), backgroundColor: Colors.green));
+      }
       Navigator.push(context, MaterialPageRoute(builder: (context) => AjoDashboardScreen(groupId: groupId)));
     }
   }

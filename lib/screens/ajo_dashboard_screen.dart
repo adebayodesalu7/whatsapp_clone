@@ -97,7 +97,7 @@ class _AjoDashboardScreenState extends State<AjoDashboardScreen> {
                     IconButton(
                       icon: const Icon(Icons.person_add_alt_1),
                       onPressed: () => _pickAndAddMember(group),
-                      tooltip: 'Add Member from Contacts',
+                      tooltip: 'Invite Member',
                     ),
                     PopupMenuButton<String>(
                       onSelected: (value) {
@@ -287,7 +287,7 @@ class _AjoDashboardScreenState extends State<AjoDashboardScreen> {
                 ),
               ),
               bottomNavigationBar: isMember ? Container(
-                padding: const EdgeInsets.fromLTRB(20, 10, 20, 30),
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 40),
                 decoration: BoxDecoration(
                   color: cardColor,
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
@@ -306,40 +306,44 @@ class _AjoDashboardScreenState extends State<AjoDashboardScreen> {
                         ],
                       ),
                     ),
-                    if (group.members.isNotEmpty && group.members[group.currentTurnIndex] == _currentUserId && currentPaid == membersCount)
+                    if (group.members.isNotEmpty && group.members[group.currentTurnIndex % group.members.length] == _currentUserId && currentPaid == membersCount)
                       SizedBox(
-                        height: 50,
+                        height: 55,
                         child: ElevatedButton(
                           onPressed: () => _handleWithdrawal(group, themeProvider),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
+                            backgroundColor: Colors.green.shade600,
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                            elevation: 4,
                           ),
-                          child: const Text('WITHDRAW POOL'),
+                          child: const Text('WITHDRAW POOL', style: TextStyle(fontWeight: FontWeight.bold)),
                         ),
                       )
                     else
                       SizedBox(
-                        height: 50,
+                        height: 55,
                         child: ElevatedButton(
-                          onPressed: (hasContributed || !isMember) ? null : () => _handlePaystackPayment(group, themeProvider),
+                          onPressed: hasContributed ? null : () => _handlePaystackPayment(group, themeProvider),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF00C3F7), 
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(horizontal: 24),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                             disabledBackgroundColor: Colors.grey.shade300,
-                            elevation: 0,
+                            elevation: 4,
                           ),
-                          child: Text(!isMember ? 'Limited Access' : (hasContributed ? 'Payment Verified' : 'Pay via Paystack')),
+                          child: Text(hasContributed ? 'Payment Verified ✓' : 'Pay via Paystack'),
                         ),
                       ),
                   ],
                 ),
-              ) : null,
+              ) : Container(
+                padding: const EdgeInsets.all(30),
+                color: cardColor,
+                child: Text('Invite-only access', textAlign: TextAlign.center, style: TextStyle(color: secondaryTextColor, fontStyle: FontStyle.italic)),
+              ),
             );
           },
         );
@@ -421,16 +425,28 @@ class _AjoDashboardScreenState extends State<AjoDashboardScreen> {
 
   Future<void> _handlePaystackPayment(AjoGroup group, ScreenThemeProvider theme) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null || user.email == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User email not found. Please update profile.')));
-      return;
+    if (user == null) return;
+
+    String? email = user.email;
+
+    if (email == null || email.isEmpty) {
+      // Fetch phone number from Firestore if email is missing
+      final userDoc = await _firestore.collection('users').doc(_currentUserId).get();
+      final phoneNumber = userDoc.data()?['phoneNumber'] as String? ?? '';
+      if (phoneNumber.isNotEmpty) {
+        // Generate a virtual email for Paystack using the phone number
+        email = '${phoneNumber.replaceAll('+', '')}@titan-ajo.com';
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Phone number not found. Please update profile.')));
+        return;
+      }
     }
 
     final reference = _paystackService.generateReference();
 
     final response = await _paystackService.checkout(
       context: context,
-      email: user.email!,
+      email: email,
       amount: group.contributionAmount,
       reference: reference,
     );
@@ -454,7 +470,7 @@ class _AjoDashboardScreenState extends State<AjoDashboardScreen> {
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Payment failed or cancelled'), backgroundColor: Colors.red),
+          SnackBar(content: Text(response?['message'] ?? 'Payment failed or cancelled'), backgroundColor: Colors.red),
         );
       }
     }
@@ -671,11 +687,30 @@ class _AjoDashboardScreenState extends State<AjoDashboardScreen> {
     showDialog(context: context, barrierDismissible: false, builder: (context) => const Center(child: CircularProgressIndicator()));
     
     try {
-      final userSnap = await _firestore.collection('users').where('phoneNumber', isEqualTo: phone).limit(1).get();
-      String targetId = userSnap.docs.isNotEmpty ? userSnap.docs.first.id : phone.replaceAll(RegExp(r'[^0-9]'), '');
+      // Normalize phone number
+      String cleanPhone = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+      String altPhone = '';
+      if (cleanPhone.startsWith('0')) {
+        altPhone = '+234' + cleanPhone.substring(1);
+      } else if (cleanPhone.startsWith('234')) {
+        altPhone = '+' + cleanPhone;
+      } else if (!cleanPhone.startsWith('+')) {
+        altPhone = '+234' + cleanPhone;
+      }
+
+      final userSnap = await _firestore.collection('users').where('phoneNumber', isEqualTo: cleanPhone).limit(1).get();
+      var finalSnap = userSnap;
+      if (finalSnap.docs.isEmpty && altPhone.isNotEmpty) {
+        finalSnap = await _firestore.collection('users').where('phoneNumber', isEqualTo: altPhone).limit(1).get();
+      }
+
+      String targetId = finalSnap.docs.isNotEmpty ? finalSnap.docs.first.id : '';
 
       if (targetId.isEmpty) {
         Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('User not found on ChatApp. They must register first.')),
+        );
         return;
       }
 

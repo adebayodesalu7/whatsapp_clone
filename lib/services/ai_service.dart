@@ -81,4 +81,15 @@ class AIService {
       return "Business Assistant Error: $e";
     }
   }
+
+  Future<String> getBusinessAutoReply(String message) async {
+    final prompt = "You are a professional business assistant. Generate a polite and helpful auto-reply for this customer message: '$message'. If it's a greeting, acknowledge it. If it's an inquiry, say someone will be with them shortly.";
+    try {
+      final content = [Content.text(prompt)];
+      final response = await _model.generateContent(content);
+      return response.text ?? "Thank you for your message. We will get back to you shortly.";
+    } catch (e) {
+      return "Auto-reply Error: $e";
+    }
+  }
 }

@@ -318,6 +318,19 @@ class ChatService {
     await _firestore.collection('chats').doc(chatId).update({'isLocked': lock});
   }
 
+  Future<void> muteChat(String chatId, int hours) async {
+    final DateTime until = DateTime.now().add(Duration(hours: hours));
+    await _firestore.collection('chats').doc(chatId).update({
+      'mutedUntil': Timestamp.fromDate(until),
+    });
+  }
+
+  Future<void> unmuteChat(String chatId) async {
+    await _firestore.collection('chats').doc(chatId).update({
+      'mutedUntil': null,
+    });
+  }
+
   Future<void> pinChat(String chatId, bool pin) async {
     await _firestore.collection('chats').doc(chatId).update({'isPinned': pin});
   }
@@ -379,5 +392,15 @@ class ChatService {
     for (var doc in messages.docs) {
       await doc.reference.delete();
     }
+  }
+
+  Future<void> deleteChat(String chatId) async {
+    // Delete all messages in the sub-collection
+    final messages = await _firestore.collection('chats').doc(chatId).collection('messages').get();
+    for (var doc in messages.docs) {
+      await doc.reference.delete();
+    }
+    // Delete the chat metadata document
+    await _firestore.collection('chats').doc(chatId).delete();
   }
 }
