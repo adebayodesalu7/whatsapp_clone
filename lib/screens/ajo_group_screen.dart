@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../models/models.dart';
 import '../providers/screen_theme_provider.dart';
 import '../services/payment_service.dart';
 import '../services/paystack_service.dart';
 import 'ajo_dashboard_screen.dart';
+import 'personal_savings_screen.dart';
 
 class AjoGroupScreen extends StatefulWidget {
   const AjoGroupScreen({super.key});
@@ -18,13 +20,13 @@ class AjoGroupScreen extends StatefulWidget {
 class _AjoGroupScreenState extends State<AjoGroupScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String _currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+  final _currencyFormat = NumberFormat.currency(symbol: '₦', decimalDigits: 0);
 
   void _showStartAjoDialog(ScreenThemeProvider themeProvider, {AjoGroup? editGroup}) {
     final nameController = TextEditingController(text: editGroup?.name);
     final amountController = TextEditingController(text: editGroup?.contributionAmount.toString());
     final cyclesController = TextEditingController(text: editGroup?.totalCycles.toString() ?? '12');
     String frequency = editGroup?.frequencyType ?? 'Monthly';
-
     final rulesController = TextEditingController(text: editGroup?.rules);
 
     showDialog(
@@ -32,7 +34,8 @@ class _AjoGroupScreenState extends State<AjoGroupScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           backgroundColor: themeProvider.getColor('card'),
-          title: Text(editGroup == null ? 'Start New Ajo' : 'Edit Ajo Settings', 
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+          title: Text(editGroup == null ? 'Start New Circle' : 'Edit Circle Settings', 
               style: TextStyle(color: themeProvider.getColor('text'), fontWeight: FontWeight.bold)),
           content: SingleChildScrollView(
             child: Column(
@@ -41,7 +44,7 @@ class _AjoGroupScreenState extends State<AjoGroupScreen> {
                 TextField(
                   controller: nameController, 
                   style: TextStyle(color: themeProvider.getColor('text')),
-                  decoration: const InputDecoration(labelText: 'Group Name'),
+                  decoration: const InputDecoration(labelText: 'Circle Name'),
                 ),
                 TextField(
                   controller: amountController, 
@@ -53,7 +56,7 @@ class _AjoGroupScreenState extends State<AjoGroupScreen> {
                 DropdownButtonFormField<String>(
                   value: frequency,
                   dropdownColor: themeProvider.getColor('card'),
-                  decoration: const InputDecoration(labelText: 'Contribution Frequency'),
+                  decoration: const InputDecoration(labelText: 'Frequency'),
                   style: TextStyle(color: themeProvider.getColor('text')),
                   items: ['Daily', 'Weekly', 'Monthly'].map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
                   onChanged: (v) => setDialogState(() => frequency = v!),
@@ -61,14 +64,8 @@ class _AjoGroupScreenState extends State<AjoGroupScreen> {
                 TextField(
                   controller: cyclesController, 
                   style: TextStyle(color: themeProvider.getColor('text')),
-                  decoration: const InputDecoration(labelText: 'Duration (Number of Payments)'), 
+                  decoration: const InputDecoration(labelText: 'Total Turns'), 
                   keyboardType: TextInputType.number,
-                ),
-                TextField(
-                  controller: rulesController, 
-                  style: TextStyle(color: themeProvider.getColor('text')),
-                  maxLines: 3,
-                  decoration: const InputDecoration(labelText: 'Group Rules / Targets', hintText: 'e.g. Must pay before 5th of every month'),
                 ),
               ],
             ),
@@ -76,7 +73,7 @@ class _AjoGroupScreenState extends State<AjoGroupScreen> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: themeProvider.getColor('primary')),
+              style: ElevatedButton.styleFrom(backgroundColor: themeProvider.getColor('primary'), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
               onPressed: () async {
                 if (nameController.text.isNotEmpty && amountController.text.isNotEmpty) {
                   final amount = double.tryParse(amountController.text) ?? 0.0;
@@ -99,19 +96,11 @@ class _AjoGroupScreenState extends State<AjoGroupScreen> {
                   if (editGroup == null) {
                     final user = FirebaseAuth.instance.currentUser;
                     String email = user?.email ?? '${user?.phoneNumber?.replaceAll('+', '') ?? 'user'}@titan-ajo.com';
-
                     final paystackService = PaystackService();
                     
-                    // Show a sub-loading for account generation
-                    showDialog(
-                      context: context, 
-                      barrierDismissible: false, 
-                      builder: (c) => const Center(child: CircularProgressIndicator())
-                    );
-
+                    showDialog(context: context, barrierDismissible: false, builder: (c) => const Center(child: CircularProgressIndicator()));
                     final accountDetails = await paystackService.createDedicatedAccount(nameController.text, email);
-                    
-                    if (mounted) Navigator.pop(context); // Close sub-loading
+                    if (mounted) Navigator.pop(context);
 
                     await _firestore.collection('ajo_groups').add({
                       ...ajoData,
@@ -127,11 +116,10 @@ class _AjoGroupScreenState extends State<AjoGroupScreen> {
                   } else {
                     await _firestore.collection('ajo_groups').doc(editGroup.id).update(ajoData);
                   }
-                  
                   if (mounted) Navigator.pop(context);
                 }
               },
-              child: Text(editGroup == null ? 'Start' : 'Update', style: const TextStyle(color: Colors.white)),
+              child: Text(editGroup == null ? 'Launch' : 'Update', style: const TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -146,239 +134,307 @@ class _AjoGroupScreenState extends State<AjoGroupScreen> {
     final secondaryTextColor = themeProvider.getColor('textSecondary');
 
     return Scaffold(
-      backgroundColor: themeProvider.getColor('scaffold'),
+      backgroundColor: Colors.black, // Dark themed Hub as in screenshot
       appBar: AppBar(
-        title: Text('Community Savings (Ajo)', style: TextStyle(color: themeProvider.getColor('appBarText'), fontWeight: FontWeight.bold)),
-        backgroundColor: themeProvider.getColor('appBar'),
-        iconTheme: IconThemeData(color: themeProvider.getColor('appBarText')),
+        backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('WELCOME,', style: TextStyle(color: Colors.grey, fontSize: 10, letterSpacing: 1.2)),
+            FutureBuilder<DocumentSnapshot>(
+              future: _firestore.collection('users').doc(_currentUserId).get(),
+              builder: (context, snap) {
+                String name = snap.data?.get('name') ?? 'Adebayo';
+                return Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20));
+              }
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(icon: const Icon(Icons.notifications_none, color: Colors.white), onPressed: () {}),
+        ],
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: _firestore.collection('ajo_groups').where('members', arrayContains: _currentUserId).snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return Center(child: CircularProgressIndicator(color: themeProvider.getColor('primary')));
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // Trust Status Card
+          _buildTrustStatusCard(),
+          const SizedBox(height: 24),
           
-          final docs = snapshot.data?.docs ?? [];
+          // Expected Returns Card
+          _buildReturnsCard(),
+          const SizedBox(height: 24),
 
-          if (docs.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.savings_outlined, size: 80, color: secondaryTextColor.withOpacity(0.3)),
-                  const SizedBox(height: 16),
-                  Text('No Ajo groups yet', style: TextStyle(color: secondaryTextColor, fontSize: 16)),
-                ],
-              ),
-            );
-          }
+          // Quick Action Grid
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 3,
+            mainAxisSpacing: 16,
+            crossAxisSpacing: 16,
+            children: [
+              _buildQuickAction(Icons.add, 'New Circle', 'Start fresh', () => _showStartAjoDialog(themeProvider)),
+              _buildQuickAction(Icons.swap_horiz, 'Import Ajo', 'Digitize existing', () {}),
+              _buildQuickAction(Icons.search, 'Find Ajo', 'Join nearby', () {}),
+            ],
+          ),
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: docs.length,
-            itemBuilder: (context, index) {
-              final group = AjoGroup.fromMap(docs[index].data() as Map<String, dynamic>, docs[index].id);
-              return _buildAjoGroupCard(group, themeProvider);
-            },
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showStartAjoDialog(themeProvider),
-        backgroundColor: themeProvider.getColor('primary'),
-        foregroundColor: Colors.white,
-        label: const Text('Start New Ajo', style: TextStyle(fontWeight: FontWeight.bold)),
-        icon: const Icon(Icons.add),
+          const SizedBox(height: 32),
+
+          // Verification Status
+          _buildVerificationBanner(themeProvider),
+          
+          const SizedBox(height: 32),
+          Text('ACTIVE CIRCLES', style: TextStyle(color: secondaryTextColor, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1.2)),
+          const SizedBox(height: 16),
+          
+          StreamBuilder<QuerySnapshot>(
+            stream: _firestore.collection('ajo_groups').where('members', arrayContains: _currentUserId).snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+              final docs = snapshot.data!.docs;
+              if (docs.isEmpty) return _buildEmptyState(secondaryTextColor);
+              
+              return Column(
+                children: docs.map((doc) {
+                   final group = AjoGroup.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+                   return _buildCircleTile(group, themeProvider);
+                }).toList(),
+              );
+            }
+          ),
+          
+          const SizedBox(height: 24),
+          Text('PERSONAL SAVINGS', style: TextStyle(color: secondaryTextColor, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1.2)),
+          const SizedBox(height: 16),
+          _buildPersonalSavingsButton(themeProvider),
+          
+          const SizedBox(height: 100),
+        ],
       ),
     );
   }
 
-  Widget _buildAjoGroupCard(AjoGroup group, ScreenThemeProvider themeProvider) {
-    int paidCount = group.payoutStatus.values.where((v) => v).length;
-    double progress = group.members.isEmpty ? 0 : paidCount / group.members.length;
-    final textColor = themeProvider.getColor('text');
-    final secondaryTextColor = themeProvider.getColor('textSecondary');
-    final isAdmin = group.creatorId == _currentUserId;
-
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => AjoDashboardScreen(groupId: group.id),
-          ),
-        );
-      },
-      child: Card(
-        color: themeProvider.getColor('card'),
-        elevation: 2,
-        shadowColor: Colors.black.withOpacity(0.1),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        margin: const EdgeInsets.only(bottom: 16),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildTrustStatusCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1C1F26),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        children: [
+          Row(
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              const Icon(Icons.eco, color: Colors.green, size: 24),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(child: Text(group.name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor), overflow: TextOverflow.ellipsis)),
-                  if (isAdmin) 
-                    IconButton(
-                      icon: Icon(Icons.edit_note, color: themeProvider.getColor('primary')), 
-                      onPressed: () => _showStartAjoDialog(themeProvider, editGroup: group),
-                    ),
-                  Icon(Icons.savings, color: themeProvider.getColor('primary')),
+                  const Text('TRUST STATUS', style: TextStyle(color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)),
+                  Text('Newbie • 150 PTS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                 ],
               ),
-              const SizedBox(height: 8),
-              Text('Contribution: ₦${group.contributionAmount} (${group.frequencyType})', style: TextStyle(color: secondaryTextColor)),
-              Text('Target: ₦${group.totalTargetAmount?.toStringAsFixed(0)} / ${group.totalCycles} Cycles', style: TextStyle(color: secondaryTextColor, fontSize: 12)),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Payout Progress', style: TextStyle(fontSize: 12, color: secondaryTextColor)),
-                  Text('$paidCount / ${group.members.length} paid', style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
-                ],
-              ),
-              const SizedBox(height: 8),
-              LinearProgressIndicator(
-                value: progress,
-                backgroundColor: secondaryTextColor.withOpacity(0.1),
-                valueColor: AlwaysStoppedAnimation<Color>(themeProvider.getColor('primary')),
-                minHeight: 8,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => _showMembers(group, themeProvider), 
-                    child: Text('View Members', style: TextStyle(color: themeProvider.getColor('primary'))),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: themeProvider.getColor('primary'), 
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onPressed: () async {
-                      final user = FirebaseAuth.instance.currentUser;
-                      if (user == null) return;
-
-                      String? email = user.email;
-                      if (email == null || email.isEmpty) {
-                        final userDoc = await _firestore.collection('users').doc(_currentUserId).get();
-                        final phoneNumber = userDoc.data()?['phoneNumber'] as String? ?? '';
-                        if (phoneNumber.isNotEmpty) {
-                          email = '${phoneNumber.replaceAll('+', '')}@titan-ajo.com';
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Phone number not found.')));
-                          return;
-                        }
-                      }
-
-                      final paystackService = PaystackService();
-                      final reference = paystackService.generateReference();
-
-                      showDialog(
-                        context: context,
-                        barrierDismissible: false,
-                        builder: (context) => const Center(child: CircularProgressIndicator()),
-                      );
-
-                      final response = await paystackService.checkout(
-                        context: context,
-                        email: email,
-                        amount: group.contributionAmount,
-                        reference: reference,
-                      );
-
-                      if (mounted) Navigator.pop(context); // Close loading
-
-                      if (response != null && response['status'] == true) {
-                        await _firestore.collection('ajo_groups').doc(group.id).update({
-                          'payoutStatus.$_currentUserId': true,
-                        });
-
-                        // Record contribution
-                        await _firestore.collection('ajo_groups').doc(group.id).collection('contributions').add({
-                          'userId': _currentUserId,
-                          'userName': user.displayName ?? 'Member',
-                          'amount': group.contributionAmount,
-                          'reference': reference,
-                          'timestamp': FieldValue.serverTimestamp(),
-                        });
-
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Contribution of ₦${group.contributionAmount} successful!')),
-                          );
-                        }
-                      } else {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(response?['message'] ?? 'Payment failed or cancelled'), backgroundColor: Colors.red),
-                          );
-                        }
-                      }
-                    },
-                    child: const Text('Contribute', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ],
+              const Spacer(),
+              Container(
+                width: 100,
+                height: 6,
+                decoration: BoxDecoration(color: Colors.grey.shade800, borderRadius: BorderRadius.circular(3)),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(width: 40, height: 6, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(3))),
+                ),
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReturnsCard() {
+    return Container(
+      height: 180,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF006D4E), Color(0xFF004D3F)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(25),
+      ),
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.account_balance_wallet, color: Colors.orangeAccent, size: 16),
+              const SizedBox(width: 8),
+              const Text('EXPECTED RETURNS', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Text(_currencyFormat.format(0), style: const TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.w900)),
+          const Spacer(),
+          Row(
+            children: [
+              Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle)),
+              const SizedBox(width: 8),
+              const Text('Locked in 0 Active Circles', style: TextStyle(color: Colors.white60, fontSize: 12)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickAction(IconData icon, String title, String subtitle, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1F26),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: Colors.orangeAccent, size: 24),
+            const SizedBox(height: 8),
+            Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+            Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 8), textAlign: TextAlign.center),
+          ],
         ),
       ),
     );
   }
 
-  void _showMembers(AjoGroup group, ScreenThemeProvider themeProvider) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: themeProvider.getColor('card'),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('${group.name} Members', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: themeProvider.getColor('text'))),
-              const SizedBox(height: 20),
-              ...group.members.map((member) {
-                bool isPaid = group.payoutStatus[member] ?? false;
-                return FutureBuilder<DocumentSnapshot>(
-                  future: FirebaseFirestore.instance.collection('users').doc(member).get(),
-                  builder: (context, userSnap) {
-                    String name = "Loading...";
-                    if (userSnap.hasData && userSnap.data!.exists) {
-                       name = (userSnap.data!.data() as Map<String, dynamic>)['name'] ?? member;
-                    }
-                    return ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: CircleAvatar(
-                        backgroundColor: themeProvider.getColor('primary').withOpacity(0.1),
-                        child: Icon(Icons.person, color: themeProvider.getColor('primary')),
-                      ),
-                      title: Text(name, style: TextStyle(fontWeight: FontWeight.w500, color: themeProvider.getColor('text'))),
-                      trailing: isPaid
-                          ? Chip(label: const Text('Paid'), backgroundColor: Colors.green.withOpacity(0.1), labelStyle: const TextStyle(color: Colors.green, fontSize: 12))
-                          : Chip(label: const Text('Pending'), backgroundColor: Colors.orange.withOpacity(0.1), labelStyle: const TextStyle(color: Colors.orange, fontSize: 12)),
-                    );
-                  }
-                );
-              }).toList(),
-            ],
+  Widget _buildVerificationBanner(ScreenThemeProvider theme) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1C1F26),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        children: [
+          const Icon(Icons.lock_outline, color: Colors.orangeAccent, size: 40),
+          const SizedBox(height: 16),
+          const Text('Complete Verification', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+          const SizedBox(height: 8),
+          const Text('Get verified with BVN and ₦500 to unlock higher tiers', style: TextStyle(color: Colors.grey, fontSize: 12), textAlign: TextAlign.center),
+          const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: () => _showVerificationDialog(theme),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: theme.getColor('primary'),
+              minimumSize: const Size(double.infinity, 45),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('VERIFY NOW', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
-        );
-      },
+        ],
+      ),
     );
+  }
+
+  void _showVerificationDialog(ScreenThemeProvider theme) {
+    final bvnController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: theme.getColor('card'),
+        title: Text('BVN Verification', style: TextStyle(color: theme.getColor('text'), fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Enter your 11-digit Bank Verification Number to upgrade to Tier 2.', style: TextStyle(fontSize: 12)),
+            const SizedBox(height: 20),
+            TextField(
+              controller: bvnController,
+              keyboardType: TextInputType.number,
+              maxLength: 11,
+              style: TextStyle(color: theme.getColor('text')),
+              decoration: const InputDecoration(labelText: 'BVN Number', counterText: ''),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              if (bvnController.text.length == 11) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ BVN Verified Successfully! Upgraded to Tier 2.')));
+              }
+            }, 
+            child: const Text('VERIFY'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCircleTile(AjoGroup group, ScreenThemeProvider theme) {
+    return GestureDetector(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => AjoDashboardScreen(groupId: group.id))),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: const Color(0xFF1C1F26), borderRadius: BorderRadius.circular(15)),
+        child: Row(
+          children: [
+            CircleAvatar(backgroundColor: theme.getColor('primary').withOpacity(0.1), child: const Icon(Icons.group, color: Colors.white)),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(group.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  Text('₦${group.contributionAmount} / ${group.frequencyType}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Colors.grey),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPersonalSavingsButton(ScreenThemeProvider theme) {
+    return GestureDetector(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const PersonalSavingsScreen())),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          border: Border.all(color: theme.getColor('primary').withOpacity(0.3)),
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.person_pin, color: Colors.orangeAccent),
+            const SizedBox(width: 16),
+            const Expanded(
+              child: Text('Setup Personal Savings Circle', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+            const Icon(Icons.add_circle_outline, color: Colors.white),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(Color color) {
+     return Center(child: Text('No active group circles yet', style: TextStyle(color: color, fontSize: 12)));
   }
 }

@@ -737,30 +737,54 @@ class _AjoDashboardScreenState extends State<AjoDashboardScreen> {
   }
 
   void _confirmDeleteGroup(AjoGroup group) {
+    int currentPaid = group.payoutStatus.values.where((v) => v).length;
+    int membersCount = group.members.length;
+    bool isCycleFinished = group.currentTurnIndex >= membersCount - 1 && currentPaid == membersCount;
+    bool hasOutstanding = currentPaid < membersCount;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Ajo Group?'),
-        content: const Text('This will permanently delete the group and all its records. Funds already contributed will need manual settlement.'),
+        content: Text(hasOutstanding 
+          ? 'Cannot delete group yet. There are outstanding payments from members. All members must settle their contributions first.'
+          : 'This will permanently delete the group and all its records. Funds already contributed will need manual settlement.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
-          TextButton(
-            onPressed: () async {
-              await _firestore.collection('ajo_groups').doc(group.id).delete();
-              if (mounted) {
-                Navigator.pop(context); 
-                Navigator.pop(context); 
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ajo Group deleted.')));
-              }
-            },
-            child: const Text('DELETE', style: TextStyle(color: Colors.red)),
-          ),
+          if (!hasOutstanding)
+            TextButton(
+              onPressed: () async {
+                await _firestore.collection('ajo_groups').doc(group.id).delete();
+                if (mounted) {
+                  Navigator.pop(context); 
+                  Navigator.pop(context); 
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ajo Group deleted.')));
+                }
+              },
+              child: const Text('DELETE', style: TextStyle(color: Colors.red)),
+            ),
         ],
       ),
     );
   }
 
   void _editRules(AjoGroup group, ScreenThemeProvider theme) {
+    int currentPaid = group.payoutStatus.values.where((v) => v).length;
+    int totalMembers = group.members.length;
+    bool isHalfWay = group.currentTurnIndex >= (totalMembers / 2).floor();
+
+    if (!isHalfWay) {
+      showDialog(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('Action Locked'),
+          content: const Text('Group rules can only be modified once the circle has reached the halfway mark.'),
+          actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
+        ),
+      );
+      return;
+    }
+
     final rulesController = TextEditingController(text: group.rules);
     showDialog(
       context: context,

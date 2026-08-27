@@ -508,3 +508,87 @@ class Call {
     required this.timestamp,
   });
 }
+
+class PersonalSavings {
+  final String id;
+  final String userId;
+  final String name;
+  final double targetAmount;
+  final double currentBalance;
+  final int durationMonths;
+  final String frequency; // 'Daily', 'Weekly', 'Monthly'
+  final DateTime startDate;
+  final DateTime targetDate;
+  final String bankName;
+  final String accountNumber;
+  final String nextOfKinPhone;
+  final bool isVerified; // ₦500 verification
+  final bool isBvnVerified;
+  final int tier; // 1: Newbie, 2: Bronze, 3: Silver
+  final int points;
+  final bool isLocked;
+
+  PersonalSavings({
+    required this.id,
+    required this.userId,
+    required this.name,
+    required this.targetAmount,
+    this.currentBalance = 0.0,
+    required this.durationMonths,
+    required this.frequency,
+    required this.startDate,
+    required this.targetDate,
+    required this.bankName,
+    required this.accountNumber,
+    required this.nextOfKinPhone,
+    this.isVerified = false,
+    this.isBvnVerified = false,
+    this.tier = 1,
+    this.points = 150,
+    this.isLocked = false,
+  });
+
+  factory PersonalSavings.fromMap(Map<String, dynamic> map, String id) {
+    return PersonalSavings(
+      id: id,
+      userId: map['userId'] ?? '',
+      name: map['name'] ?? '',
+      targetAmount: (map['targetAmount'] ?? 0.0).toDouble(),
+      currentBalance: (map['currentBalance'] ?? 0.0).toDouble(),
+      durationMonths: map['durationMonths'] ?? 1,
+      frequency: map['frequency'] ?? 'Monthly',
+      startDate: (map['startDate'] as Timestamp).toDate(),
+      targetDate: (map['targetDate'] as Timestamp).toDate(),
+      bankName: map['bankName'] ?? '',
+      accountNumber: map['accountNumber'] ?? '',
+      nextOfKinPhone: map['nextOfKinPhone'] ?? '',
+      isVerified: map['isVerified'] ?? false,
+      isBvnVerified: map['isBvnVerified'] ?? false,
+      tier: map['tier'] ?? 1,
+      points: map['points'] ?? 150,
+      isLocked: map['isLocked'] ?? false,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'userId': userId,
+      'name': name,
+      'targetAmount': targetAmount,
+      'currentBalance': currentBalance,
+      'durationMonths': durationMonths,
+      'frequency': frequency,
+      'startDate': startDate,
+      'targetDate': targetDate,
+      'bankName': bankName,
+      'accountNumber': accountNumber,
+      'nextOfKinPhone': nextOfKinPhone,
+      'isVerified': isVerified,
+      'isBvnVerified': isBvnVerified,
+      'tier': tier,
+      'points': points,
+      'isLocked': isLocked,
+    };
+  }
+}
+

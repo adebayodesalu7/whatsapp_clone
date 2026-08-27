@@ -950,9 +950,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    '10:00 AM',
+                    data['timestamp'] != null 
+                      ? DateFormat('HH:mm').format((data['timestamp'] as Timestamp).toDate())
+                      : '',
                     style: TextStyle(fontSize: 9, color: Colors.grey.shade600),
                   ),
+                  if (isMe) ...[
+                    const SizedBox(width: 4),
+                    Icon(
+                      (data['read'] ?? false) ? Icons.done_all : Icons.done,
+                      size: 14,
+                      color: (data['read'] ?? false) ? Colors.blue : Colors.grey.shade600,
+                    ),
+                  ],
                   if (isPinned) ...[
                     const SizedBox(width: 4),
                     const Icon(Icons.push_pin, size: 10, color: Colors.grey),

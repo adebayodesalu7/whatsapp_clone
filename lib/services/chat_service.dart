@@ -87,6 +87,7 @@ class ChatService {
       'type': 'text',
       'timestamp': FieldValue.serverTimestamp(),
       'read': false,
+      'status': 'sent',
       'replyTo': replyTo,
       'isDisappearing': (disappearingTimer ?? 0) > 0,
       'expiresAt': (disappearingTimer ?? 0) > 0 
