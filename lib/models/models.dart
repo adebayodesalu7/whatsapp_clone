@@ -279,54 +279,88 @@ class Transaction {
 class AjoGroup {
   final String id;
   final String name;
+  final String creatorId;
   final double contributionAmount;
-  final String contributionCurrency; // 'NGN' or 'USDT'
+  final String contributionCurrency; 
+  final String frequencyType; // 'Daily', 'Weekly', 'Monthly'
   final int frequencyDays;
+  final int totalCycles; // How many times contributors will pay (e.g., 12 months)
+  final double? totalTargetAmount;
   final List<String> members;
-  final Map<String, bool> payoutStatus; // userId: paid
+  final Map<String, bool> payoutStatus; 
   final DateTime createdAt;
   final DateTime? nextPayoutDate;
   final int currentTurnIndex;
+  
+  // Group-specific Receiving Account
+  final String? bankName;
+  final String? accountNumber;
+  final String? accountName;
+  final String? rules;
 
   AjoGroup({
     required this.id,
     required this.name,
+    required this.creatorId,
     required this.contributionAmount,
     this.contributionCurrency = 'NGN',
+    required this.frequencyType,
     required this.frequencyDays,
+    required this.totalCycles,
+    this.totalTargetAmount,
     required this.members,
     required this.payoutStatus,
     required this.createdAt,
     this.nextPayoutDate,
     this.currentTurnIndex = 0,
+    this.bankName,
+    this.accountNumber,
+    this.accountName,
+    this.rules,
   });
 
   factory AjoGroup.fromMap(Map<String, dynamic> map, String id) {
     return AjoGroup(
       id: id,
       name: map['name'] ?? '',
+      creatorId: map['creatorId'] ?? '',
       contributionAmount: double.tryParse(map['contributionAmount'].toString()) ?? 0.0,
       contributionCurrency: map['contributionCurrency'] ?? 'NGN',
+      frequencyType: map['frequencyType'] ?? 'Monthly',
       frequencyDays: map['frequencyDays'] ?? 30,
+      totalCycles: map['totalCycles'] ?? 1,
+      totalTargetAmount: map['totalTargetAmount'] != null ? double.tryParse(map['totalTargetAmount'].toString()) : null,
       members: List<String>.from(map['members'] ?? []),
       payoutStatus: Map<String, bool>.from(map['payoutStatus'] ?? {}),
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       nextPayoutDate: (map['nextPayoutDate'] as Timestamp?)?.toDate(),
       currentTurnIndex: map['currentTurnIndex'] ?? 0,
+      bankName: map['bankName'],
+      accountNumber: map['accountNumber'],
+      accountName: map['accountName'],
+      rules: map['rules'],
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
       'name': name,
+      'creatorId': creatorId,
       'contributionAmount': contributionAmount,
       'contributionCurrency': contributionCurrency,
+      'frequencyType': frequencyType,
       'frequencyDays': frequencyDays,
+      'totalCycles': totalCycles,
+      'totalTargetAmount': totalTargetAmount,
       'members': members,
       'payoutStatus': payoutStatus,
       'createdAt': FieldValue.serverTimestamp(),
       'nextPayoutDate': nextPayoutDate != null ? Timestamp.fromDate(nextPayoutDate!) : null,
       'currentTurnIndex': currentTurnIndex,
+      'bankName': bankName,
+      'accountNumber': accountNumber,
+      'accountName': accountName,
+      'rules': rules,
     };
   }
 }

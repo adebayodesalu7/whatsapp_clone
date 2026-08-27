@@ -239,7 +239,8 @@ class ItemDetailScreen extends StatelessWidget {
                                 'orderId': orderId,
                                 'status': 'Pending',
                                 'type': 'Escrow',
-                              }
+                              },
+                              isGroup: false,
                             );
 
                             ScaffoldMessenger.of(context).showSnackBar(

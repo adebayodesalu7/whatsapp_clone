@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:screen_protector/screen_protector.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:whatsapp_clone/providers/screen_theme_provider.dart';
 import 'package:whatsapp_clone/services/security_service.dart';
 
@@ -49,9 +51,17 @@ class _PrivacySettingsState extends State<PrivacySettings> {
       title: Text(value, style: TextStyle(color: themeProvider.getColor('text'))),
       value: value,
       groupValue: _visibility[title],
-      onChanged: (v) {
+      onChanged: (v) async {
         setState(() => _visibility[title] = v!);
         Navigator.pop(context);
+        
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+            'privacy.${title.replaceAll(' ', '')}': v,
+          });
+        }
+
         if (hasPicker) _showContactPicker(title, themeProvider);
       },
       activeColor: themeProvider.getColor('primary'),
@@ -74,17 +84,27 @@ class _PrivacySettingsState extends State<PrivacySettings> {
               Text('Select contacts to hide $title from', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: themeProvider.getColor('text'))),
               const SizedBox(height: 16),
               Expanded(
-                child: ListView.builder(
-                  itemCount: 5,
-                  itemBuilder: (context, index) {
-                    final contacts = ['Alice', 'Bob', 'Charlie', 'David', 'Eve'];
-                    return CheckboxListTile(
-                      title: Text(contacts[index], style: TextStyle(color: themeProvider.getColor('text'))),
-                      value: index % 2 == 0,
-                      onChanged: (v) {},
-                      activeColor: themeProvider.getColor('primary'),
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance.collection('users').limit(10).snapshots(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                    final contacts = snapshot.data!.docs.where((d) => d.id != FirebaseAuth.instance.currentUser?.uid).toList();
+                    return ListView.builder(
+                      itemCount: contacts.length,
+                      itemBuilder: (context, index) {
+                        final data = contacts[index].data() as Map<String, dynamic>;
+                        final name = data['name'] ?? 'User';
+                        return CheckboxListTile(
+                          title: Text(name, style: TextStyle(color: themeProvider.getColor('text'))),
+                          value: false, // In a real app, track selected UIDs
+                          onChanged: (v) {
+                             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$title hidden from $name')));
+                          },
+                          activeColor: themeProvider.getColor('primary'),
+                        );
+                      },
                     );
-                  },
+                  }
                 ),
               ),
               ElevatedButton(
@@ -107,7 +127,6 @@ class _PrivacySettingsState extends State<PrivacySettings> {
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ScreenThemeProvider>(context);
     final textColor = themeProvider.getColor('text');
-    final secondaryTextColor = themeProvider.getColor('textSecondary');
 
     return Scaffold(
       backgroundColor: themeProvider.getColor('scaffold'),
@@ -151,15 +170,6 @@ class _PrivacySettingsState extends State<PrivacySettings> {
           const SizedBox(height: 16),
           _buildSwitchTile(
             themeProvider, 
-            Icons.visibility_off_outlined, 
-            'Stealth Mode', 
-            'Hide read receipts and online status', 
-            themeProvider.isStealthMode, 
-            (v) => themeProvider.toggleStealthMode(v)
-          ),
-          const SizedBox(height: 16),
-          _buildSwitchTile(
-            themeProvider, 
             Icons.phonelink_lock, 
             'Screenshot Prevention', 
             'Prevent screenshots in private chats', 
@@ -195,22 +205,7 @@ class _PrivacySettingsState extends State<PrivacySettings> {
             themeProvider.isTypingIndicatorEnabled, 
             (v) => themeProvider.toggleTypingIndicator(v)
           ),
-          const SizedBox(height: 12),
-          Divider(color: themeProvider.getColor('divider')),
-          const SizedBox(height: 12),
-          
-          _buildHeader('Security', textColor),
-          ListTile(
-            leading: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: themeProvider.getColor('primary').withOpacity(0.1), shape: BoxShape.circle),
-              child: Icon(Icons.shield, color: themeProvider.getColor('primary')),
-            ),
-            title: Text('Blocked Contacts', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor)),
-            subtitle: Text('0 contacts blocked', style: TextStyle(fontSize: 12, color: secondaryTextColor)),
-            trailing: Icon(Icons.arrow_forward_ios, size: 16, color: secondaryTextColor),
-            onTap: () {},
-          ),
+          const SizedBox(height: 50),
         ],
       ),
     );

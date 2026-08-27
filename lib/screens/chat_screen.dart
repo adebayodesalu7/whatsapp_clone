@@ -9,7 +9,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'package:whatsapp_clone/services/security_service.dart';
 import 'package:whatsapp_clone/services/cloudinary_service.dart';
 import 'package:whatsapp_clone/services/chat_service.dart';
 import 'package:whatsapp_clone/services/ai_service.dart';
@@ -17,6 +16,7 @@ import 'package:whatsapp_clone/services/storage_service.dart';
 import 'package:whatsapp_clone/services/business_service.dart';
 import 'package:whatsapp_clone/services/crypto_service.dart';
 import 'package:whatsapp_clone/services/escrow_service.dart';
+import 'package:whatsapp_clone/services/security_service.dart';
 import 'package:whatsapp_clone/models/enums.dart';
 import 'package:whatsapp_clone/providers/screen_theme_provider.dart';
 import 'package:whatsapp_clone/widgets/avatar.dart';
@@ -38,6 +38,7 @@ import 'contact_info_screen.dart';
 import 'active_call_screen.dart';
 import 'catalog_screen.dart';
 import 'contacts_screen.dart';
+import 'ajo_dashboard_screen.dart';
 import 'group_settings_screen.dart';
 import 'games_screen.dart';
 import 'titan_docs_screen.dart';
@@ -58,7 +59,7 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final TextEditingController _messageController = TextEditingController();
   final ChatService _chatService = ChatService();
   final AIService _aiService = AIService();
@@ -69,7 +70,8 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _replyTo;
   String? _replyText;
   List<String> _smartReplies = [];
-  Map<String, dynamic>? _appointmentIntent;
+  Timer? _typingTimer;
+  bool _isOtherUserTyping = false;
 
   late RecorderController _recorderController;
   bool _isRecording = false;
@@ -81,8 +83,60 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _recorderController = RecorderController();
     _loadChatSettings();
+    _updateUserStatus(true);
+    _listenToOtherUserStatus();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _updateUserStatus(true);
+    } else {
+      _updateUserStatus(false);
+      _setTypingStatus(false);
+    }
+  }
+
+  void _updateUserStatus(bool isOnline) {
+    if (_currentUserId == null) return;
+    FirebaseFirestore.instance.collection('users').doc(_currentUserId).update({
+      'isOnline': isOnline,
+      'lastSeen': FieldValue.serverTimestamp(),
+    });
+  }
+
+  void _listenToOtherUserStatus() {
+    if (widget.isGroup) return;
+    final chatId = _chatService.getChatId(_currentUserId!, widget.receiverId);
+    FirebaseFirestore.instance.collection('chats').doc(chatId).snapshots().listen((snap) {
+      if (snap.exists && mounted) {
+        final data = snap.data() as Map<String, dynamic>;
+        final typingMap = data['typing'] as Map<String, dynamic>? ?? {};
+        setState(() {
+          _isOtherUserTyping = typingMap[widget.receiverId] == true;
+        });
+      }
+    });
+  }
+
+  void _setTypingStatus(bool isTyping) {
+    if (widget.isGroup || _currentUserId == null) return;
+    final chatId = _chatService.getChatId(_currentUserId!, widget.receiverId);
+    FirebaseFirestore.instance.collection('chats').doc(chatId).set({
+      'typing': { _currentUserId!: isTyping }
+    }, SetOptions(merge: true));
+  }
+
+  void _onTextChanged(String text) {
+    setState(() {}); // For mic/send switch
+    if (_typingTimer?.isActive ?? false) _typingTimer!.cancel();
+    _setTypingStatus(true);
+    _typingTimer = Timer(const Duration(seconds: 2), () {
+      _setTypingStatus(false);
+    });
   }
 
   void _loadChatSettings() async {
@@ -101,8 +155,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _recorderController.dispose();
     _messageController.dispose();
+    _updateUserStatus(false);
+    _setTypingStatus(false);
     super.dispose();
   }
 
@@ -134,7 +191,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final path = await _recorderController.stop();
     setState(() => _isRecording = false);
     if (path != null) {
-      final audioUrl = await _storageService.uploadImage(path, 'chat_audio');
+      final audioUrl = await _storageService.uploadAudio(path, 'chat_audio');
       if (audioUrl != null) {
         _chatService.sendVoiceMessage(widget.receiverId, audioUrl, widget.isGroup);
       }
@@ -147,7 +204,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (image != null) {
       final imageUrl = await _storageService.uploadImage(image.path, 'chat_images');
       if (imageUrl != null) {
-        _chatService.sendImageMessage(widget.receiverId, imageUrl, widget.isGroup);
+        _chatService.sendImageMessage(widget.receiverId, imageUrl, isGroup: widget.isGroup);
       }
     }
   }
@@ -178,7 +235,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void _pickGIF() async {
     final gif = await GiphyGet.getGif(context: context, apiKey: 'YOUR_GIPHY_API_KEY');
     if (gif != null && gif.images?.original?.url != null) {
-      _chatService.sendImageMessage(widget.receiverId, gif.images!.original!.url, widget.isGroup);
+      _chatService.sendImageMessage(widget.receiverId, gif.images!.original!.url, isGroup: widget.isGroup);
     }
   }
 
@@ -276,6 +333,20 @@ class _ChatScreenState extends State<ChatScreen> {
     _chatService.markMessagesAsRead(widget.receiverId, isGroup: widget.isGroup);
   }
 
+  void _showComingSoonDialog(BuildContext context, String feature) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).cardColor,
+        title: Text('$feature Coming Soon'),
+        content: Text('The $feature feature is currently under development.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK')),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ScreenThemeProvider>(context);
@@ -294,10 +365,23 @@ class _ChatScreenState extends State<ChatScreen> {
           builder: (context, snapshot) {
             String? photoUrl;
             bool isTitanElite = false;
+            String statusText = widget.isGroup ? 'active' : 'offline';
             if (snapshot.hasData && snapshot.data!.exists) {
               final data = snapshot.data!.data() as Map<String, dynamic>;
               photoUrl = data['photoUrl'] ?? data['iconUrl'];
               isTitanElite = data['isTitanElite'] ?? false;
+              
+              if (!widget.isGroup) {
+                final isOnline = data['isOnline'] ?? false;
+                if (_isOtherUserTyping) {
+                  statusText = 'typing...';
+                } else if (isOnline) {
+                  statusText = 'online';
+                } else if (data['lastSeen'] != null) {
+                  final lastSeen = (data['lastSeen'] as Timestamp).toDate();
+                  statusText = 'last seen ${DateFormat('HH:mm').format(lastSeen)}';
+                }
+              }
             }
 
             return ClipRRect(
@@ -333,14 +417,14 @@ class _ChatScreenState extends State<ChatScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(widget.contactName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                          Text(widget.isGroup ? 'active' : 'online', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.normal, color: Colors.white70)),
+                          Text(statusText, style: TextStyle(fontSize: 10, fontWeight: FontWeight.normal, color: statusText == 'typing...' ? Colors.greenAccent : Colors.white70)),
                         ],
                       ),
                     ),
                   ),
                   actions: [
-                    IconButton(icon: const Icon(Icons.videocam, size: 22), onPressed: () {}),
-                    IconButton(icon: const Icon(Icons.call, size: 20), onPressed: () {}),
+                    IconButton(icon: const Icon(Icons.videocam, size: 22), onPressed: () => _showComingSoonDialog(context, 'Video Call')),
+                    IconButton(icon: const Icon(Icons.call, size: 20), onPressed: () => _showComingSoonDialog(context, 'Voice Call')),
                     PopupMenuButton<String>(
                       iconSize: 22,
                       onSelected: (value) {
@@ -462,27 +546,11 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  void _showMoreOptions(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Theme.of(context).cardColor,
-      builder: (context) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(leading: const Icon(Icons.report_problem_outlined), title: const Text('Report'), onTap: () => Navigator.pop(context)),
-            ListTile(leading: const Icon(Icons.block), title: const Text('Block'), onTap: () => Navigator.pop(context)),
-            ListTile(leading: const Icon(Icons.exit_to_app), title: const Text('Exit group'), onTap: () => Navigator.pop(context)),
-            ListTile(leading: const Icon(Icons.shortcut), title: const Text('Add shortcut'), onTap: () => Navigator.pop(context)),
-          ],
-        ),
-      ),
-    );
-  }
-
   void _showDisappearingMessagesDialog() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).cardColor,
         title: const Text('Disappearing Messages'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -500,8 +568,9 @@ class _ChatScreenState extends State<ChatScreen> {
   void _setTimer(int seconds) {
     setState(() => _disappearingTimer = seconds);
     final chatId = widget.isGroup ? widget.receiverId : _chatService.getChatId(_currentUserId!, widget.receiverId);
-    _chatService.setDisappearingTimer(chatId, seconds);
+    FirebaseFirestore.instance.collection('chats').doc(chatId).update({'disappearingTimer': seconds});
     Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Disappearing messages set to ${seconds == 0 ? "Off" : (seconds ~/ 3600).toString() + " hours"}')));
   }
 
   void _toggleChatLock() async {
@@ -513,6 +582,23 @@ class _ChatScreenState extends State<ChatScreen> {
       _chatService.toggleChatLock(chatId, _isLocked);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_isLocked ? 'Chat locked' : 'Chat unlocked')));
     }
+  }
+
+  void _showMoreOptions(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).cardColor,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(leading: const Icon(Icons.report_problem_outlined), title: const Text('Report'), onTap: () => Navigator.pop(context)),
+            ListTile(leading: const Icon(Icons.block), title: const Text('Block'), onTap: () => Navigator.pop(context)),
+            ListTile(leading: const Icon(Icons.exit_to_app), title: const Text('Exit group'), onTap: () => Navigator.pop(context)),
+            ListTile(leading: const Icon(Icons.shortcut), title: const Text('Add shortcut'), onTap: () => Navigator.pop(context)),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildPinnedMessagesBar(Color textColor) {
@@ -593,6 +679,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   Expanded(
                     child: TextField(
                       controller: _messageController,
+                      onChanged: _onTextChanged,
                       style: TextStyle(color: textColor, fontSize: 14),
                       decoration: InputDecoration(
                         hintText: 'Type a message',
@@ -612,14 +699,18 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           const SizedBox(width: 6),
           GestureDetector(
-            onLongPress: _startRecording,
-            onLongPressUp: _stopRecording,
+            onLongPress: _messageController.text.isEmpty ? _startRecording : null,
+            onLongPressUp: _messageController.text.isEmpty ? _stopRecording : null,
             child: CircleAvatar(
               backgroundColor: const Color(0xFF25D366),
               radius: 22,
               child: IconButton(
-                icon: const Icon(Icons.mic, color: Colors.white, size: 22),
-                onPressed: _sendMessage,
+                icon: Icon(
+                  _messageController.text.isEmpty ? Icons.mic : Icons.send, 
+                  color: Colors.white, 
+                  size: 22
+                ),
+                onPressed: _messageController.text.isEmpty ? null : _sendMessage,
               ),
             ),
           ),
@@ -714,6 +805,7 @@ class _ChatScreenState extends State<ChatScreen> {
               if (type == 'video' && videoUrl != null)
                 _buildVideoThumbnail(videoUrl),
               if (type == 'voice') VoiceMessageWidget(audioUrl: data['audioUrl'], isMe: isMe, meColor: const Color(0xFFDCF8C6), otherColor: Colors.white),
+              if (type == 'ajo_invitation') _buildAjoInvitationBubble(data['metadata'] ?? {}, isMe, themeProvider),
               if (type == 'invoice') _buildInvoiceBubble(data['metadata'] ?? {}, isMe, messageId, const Color(0xFFDCF8C6), Colors.white, Colors.black87),
               const SizedBox(height: 4),
               Row(
@@ -800,6 +892,58 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildAjoInvitationBubble(Map<String, dynamic> data, bool isMe, ScreenThemeProvider theme) {
+    return Container(
+      width: 250,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isMe ? const Color(0xFFDCF8C6) : Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.blue.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.mail_outline, color: Colors.blue),
+              const SizedBox(width: 8),
+              Text('Ajo Invitation', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue.shade800)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text('You have been invited to join ${data['name']}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 8),
+          Text('Amount: ₦${data['contributionAmount']} / ${data['frequencyType']}', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          const SizedBox(height: 16),
+          if (!isMe)
+            ElevatedButton(
+              onPressed: () => _acceptInvitation(data),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 36),
+                elevation: 0,
+              ),
+              child: const Text('Accept & Join'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _acceptInvitation(Map<String, dynamic> data) async {
+    final groupId = data['id'];
+    await FirebaseFirestore.instance.collection('ajo_groups').doc(groupId).update({
+      'members': FieldValue.arrayUnion([_currentUserId]),
+      'payoutStatus.$_currentUserId': false,
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Joined Ajo Group successfully!'), backgroundColor: Colors.green));
+      Navigator.push(context, MaterialPageRoute(builder: (context) => AjoDashboardScreen(groupId: groupId)));
+    }
   }
 
   Widget _buildInvoiceBubble(Map<String, dynamic> data, bool isMe, String messageId, Color meColor, Color otherColor, Color textColor) {

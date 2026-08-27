@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../providers/screen_theme_provider.dart';
+import 'contacts_screen.dart';
 
 class ContactInfoScreen extends StatefulWidget {
   final String contactId;
@@ -26,21 +27,28 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
   final ImagePicker _picker = ImagePicker();
   File? _imageFile;
 
-  Future<void> _pickImage() async {
+  Future<void> _pickImage(bool isAdmin) async {
+    if (!isAdmin && widget.isGroup) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Only admins can change group photo.')));
+      return;
+    }
     final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
     if (pickedFile != null) {
       setState(() {
         _imageFile = File(pickedFile.path);
       });
       String collection = widget.isGroup ? 'groups' : 'users';
-      // Saving local path to Firestore as a fallback for the emulator session
       await FirebaseFirestore.instance.collection(collection).doc(widget.contactId).set({
         'photoUrl': pickedFile.path, 
       }, SetOptions(merge: true));
     }
   }
 
-  Future<void> _editField(String title, String field, String currentValue, ScreenThemeProvider themeProvider) async {
+  Future<void> _editField(String title, String field, String currentValue, ScreenThemeProvider themeProvider, bool isAdmin) async {
+    if (!isAdmin && widget.isGroup) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Only admins can edit group details.')));
+      return;
+    }
     final controller = TextEditingController(text: currentValue);
     String collection = widget.isGroup ? 'groups' : 'users';
 
@@ -66,15 +74,9 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
           ),
           TextButton(
             onPressed: () async {
-              if (field == 'members') {
-                await FirebaseFirestore.instance.collection(collection).doc(widget.contactId).update({
-                  'members': FieldValue.arrayUnion([controller.text]),
-                });
-              } else {
-                await FirebaseFirestore.instance.collection(collection).doc(widget.contactId).set({
-                  field: controller.text,
-                }, SetOptions(merge: true));
-              }
+              await FirebaseFirestore.instance.collection(collection).doc(widget.contactId).set({
+                field: controller.text,
+              }, SetOptions(merge: true));
               if (mounted) Navigator.pop(context);
               setState(() {});
             },
@@ -85,7 +87,9 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
     );
   }
 
-  void _showRolePicker(String memberId, String name, ScreenThemeProvider themeProvider) {
+  void _showRolePicker(String memberId, String name, ScreenThemeProvider themeProvider, bool currentUserIsAdmin) {
+    if (!currentUserIsAdmin) return;
+    
     showModalBottomSheet(
       context: context,
       backgroundColor: themeProvider.getColor('card'),
@@ -95,28 +99,51 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Assign Role: $name', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: themeProvider.getColor('text'))),
+            Text('Manage $name', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: themeProvider.getColor('text'))),
             const SizedBox(height: 20),
-            _roleTile('Owner', Icons.star, Colors.orange, themeProvider),
-            _roleTile('Admin', Icons.security, Colors.blue, themeProvider),
-            _roleTile('Moderator', Icons.gavel, Colors.green, themeProvider),
-            _roleTile('Event Manager', Icons.calendar_month, Colors.purple, themeProvider),
-            _roleTile('Member', Icons.person, Colors.grey, themeProvider),
+            ListTile(
+              leading: const Icon(Icons.security, color: Colors.blue),
+              title: const Text('Promote to Admin'),
+              onTap: () async {
+                await FirebaseFirestore.instance.collection('groups').doc(widget.contactId).update({
+                  'admins': FieldValue.arrayUnion([memberId]),
+                });
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.person_remove, color: Colors.red),
+              title: const Text('Remove from Group'),
+              onTap: () async {
+                await FirebaseFirestore.instance.collection('groups').doc(widget.contactId).update({
+                  'members': FieldValue.arrayRemove([memberId]),
+                  'admins': FieldValue.arrayRemove([memberId]),
+                });
+                Navigator.pop(context);
+              },
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _roleTile(String label, IconData icon, Color color, ScreenThemeProvider themeProvider) {
-    return ListTile(
-      leading: Icon(icon, color: color),
-      title: Text(label, style: TextStyle(color: themeProvider.getColor('text'))),
-      onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Role "$label" assigned to member.')));
-        Navigator.pop(context);
-      },
+  void _addParticipant(bool isAdmin) async {
+    if (!isAdmin) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Only admins can add members.')));
+      return;
+    }
+    final contact = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ContactsScreen(isPicker: true)),
     );
+
+    if (contact != null && contact['userId'] != null && contact['userId'].isNotEmpty) {
+      await FirebaseFirestore.instance.collection('groups').doc(widget.contactId).update({
+        'members': FieldValue.arrayUnion([contact['userId']]),
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${contact['name']} added.')));
+    }
   }
 
   @override
@@ -137,15 +164,6 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
         backgroundColor: appBarColor,
         iconTheme: IconThemeData(color: appBarTextColor),
         elevation: 0,
-        actions: [
-          if (!widget.isGroup) TextButton.icon(
-            onPressed: () {
-               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Now following ${widget.contactName}')));
-            },
-            icon: const Icon(Icons.person_add_alt_1, color: Colors.white, size: 18),
-            label: const Text('Follow', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
       ),
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance.collection(collection).doc(widget.contactId).snapshots(),
@@ -159,8 +177,11 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
           final about = data['about'] ?? (widget.isGroup ? 'Group Description' : 'Hey there! I am using WhatsApp');
           final photoUrl = data['photoUrl'] ?? '';
           final members = widget.isGroup ? List<String>.from(data['members'] ?? []) : [];
+          final admins = widget.isGroup ? List<String>.from(data['admins'] ?? []) : [];
+          
+          final currentUser = FirebaseAuth.instance.currentUser;
+          final bool isAdmin = !widget.isGroup || (currentUser != null && admins.contains(currentUser.uid));
 
-          // Determine which image to show: local file if just picked, or Firestore path/URL
           ImageProvider? imageProvider;
           if (_imageFile != null) {
             imageProvider = FileImage(_imageFile!);
@@ -169,9 +190,7 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
               imageProvider = NetworkImage(photoUrl);
             } else {
               final file = File(photoUrl);
-              if (file.existsSync()) {
-                imageProvider = FileImage(file);
-              }
+              if (file.existsSync()) imageProvider = FileImage(file);
             }
           }
 
@@ -184,31 +203,26 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
                   child: Stack(
                     children: [
                       GestureDetector(
-                        onTap: _pickImage,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: themeProvider.getColor('primary').withOpacity(0.5), width: 2),
-                          ),
-                          child: CircleAvatar(
-                            radius: 80,
-                            backgroundColor: themeProvider.getColor('scaffold'),
-                            backgroundImage: imageProvider,
-                            child: imageProvider == null 
-                                ? Icon(Icons.person, size: 80, color: secondaryTextColor.withOpacity(0.5)) 
-                                : null,
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 5,
-                        right: 15,
+                        onTap: () => _pickImage(isAdmin),
                         child: CircleAvatar(
-                          backgroundColor: themeProvider.getColor('primary'),
-                          radius: 22,
-                          child: const Icon(Icons.camera_alt, color: Colors.white, size: 22),
+                          radius: 80,
+                          backgroundColor: themeProvider.getColor('scaffold'),
+                          backgroundImage: imageProvider,
+                          child: imageProvider == null 
+                              ? Icon(Icons.person, size: 80, color: secondaryTextColor.withOpacity(0.5)) 
+                              : null,
                         ),
                       ),
+                      if (isAdmin)
+                        Positioned(
+                          bottom: 5,
+                          right: 15,
+                          child: CircleAvatar(
+                            backgroundColor: themeProvider.getColor('primary'),
+                            radius: 22,
+                            child: const Icon(Icons.camera_alt, color: Colors.white, size: 22),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -219,18 +233,18 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
                 child: Column(
                   children: [
                     _buildInfoTile(
-                      icon: Icons.person,
+                      icon: Icons.info_outline,
                       title: widget.isGroup ? 'Group Name' : 'Name',
                       subtitle: name,
-                      onTap: widget.isGroup ? () => _editField('Group Name', 'name', name, themeProvider) : null,
+                      onTap: isAdmin ? () => _editField(widget.isGroup ? 'Group Name' : 'Name', 'name', name, themeProvider, isAdmin) : null,
                       themeProvider: themeProvider,
                     ),
                     Divider(indent: 70, color: themeProvider.getColor('divider')),
                     _buildInfoTile(
-                      icon: Icons.info_outline,
+                      icon: Icons.description_outlined,
                       title: widget.isGroup ? 'Group Description' : 'About',
                       subtitle: about,
-                      onTap: () => _editField(widget.isGroup ? 'Description' : 'About', 'about', about, themeProvider),
+                      onTap: isAdmin ? () => _editField(widget.isGroup ? 'Description' : 'About', 'about', about, themeProvider, isAdmin) : null,
                       themeProvider: themeProvider,
                     ),
                     if (widget.isGroup) ...[
@@ -239,19 +253,15 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
                         icon: Icons.task_alt,
                         title: 'Shared Task List',
                         subtitle: 'Manage group goals and tasks',
-                        onTap: () {
-                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Task List feature coming soon!')));
-                        },
+                        onTap: () => _showTaskList(context, themeProvider),
                         themeProvider: themeProvider,
                       ),
                       Divider(indent: 70, color: themeProvider.getColor('divider')),
                       _buildInfoTile(
-                        icon: Icons.calendar_month,
-                        title: 'Group Calendar',
-                        subtitle: 'Plan group events and meetups',
-                        onTap: () {
-                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Group Calendar coming soon!')));
-                        },
+                        icon: Icons.photo_library_outlined,
+                        title: 'Collaborative Album',
+                        subtitle: 'A shared gallery for group members',
+                        onTap: () => _showCollaborativeAlbum(context, themeProvider),
                         themeProvider: themeProvider,
                       ),
                     ],
@@ -274,30 +284,28 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
                         builder: (context, userSnap) {
                           final userData = userSnap.data?.data() as Map<String, dynamic>?;
                           final memberName = userData?['name'] ?? memberId;
+                          final isMemberAdmin = admins.contains(memberId);
                           return ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                            onTap: isAdmin ? () => _showRolePicker(memberId, memberName, themeProvider, isAdmin) : null,
                             leading: CircleAvatar(
                               backgroundColor: themeProvider.getColor('primary').withOpacity(0.1),
                               child: Text(memberName[0].toUpperCase(), style: TextStyle(color: themeProvider.getColor('primary'))),
                             ),
-                            title: Text(memberName, style: TextStyle(color: textColor, fontWeight: FontWeight.w500)),
-                            subtitle: Text(userData?['about'] ?? '', style: TextStyle(color: secondaryTextColor, fontSize: 12)),
-                            trailing: widget.isGroup ? TextButton(
-                              onPressed: () => _showRolePicker(memberId, memberName, themeProvider),
-                              child: Text('Admin', style: TextStyle(color: themeProvider.getColor('primary'), fontSize: 12)),
+                            title: Text(memberName, style: TextStyle(color: textColor)),
+                            trailing: isMemberAdmin ? Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(border: Border.all(color: themeProvider.getColor('primary')), borderRadius: BorderRadius.circular(4)),
+                              child: Text('Admin', style: TextStyle(color: themeProvider.getColor('primary'), fontSize: 10)),
                             ) : null,
                           );
                         }
                       )).toList(),
-                      ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-                        leading: CircleAvatar(
-                          backgroundColor: themeProvider.getColor('primary'),
-                          child: const Icon(Icons.person_add, color: Colors.white, size: 20),
+                      if (isAdmin)
+                        ListTile(
+                          leading: Icon(Icons.person_add, color: themeProvider.getColor('primary')),
+                          title: Text('Add Participant', style: TextStyle(color: themeProvider.getColor('primary'), fontWeight: FontWeight.bold)),
+                          onTap: () => _addParticipant(isAdmin),
                         ),
-                        title: Text('Add Participant', style: TextStyle(color: themeProvider.getColor('primary'), fontWeight: FontWeight.bold)),
-                        onTap: () => _editField('Add Member (ID)', 'members', '', themeProvider),
-                      ),
                     ],
                   ),
                 ),
@@ -307,17 +315,9 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
                 themeProvider,
                 child: Column(
                   children: [
-                    ListTile(
-                      leading: const Icon(Icons.block, color: Colors.red),
-                      title: const Text('Block', style: TextStyle(color: Colors.red)),
-                      onTap: () {},
-                    ),
+                    ListTile(leading: const Icon(Icons.block, color: Colors.red), title: const Text('Block', style: TextStyle(color: Colors.red))),
                     Divider(indent: 70, color: themeProvider.getColor('divider')),
-                    ListTile(
-                      leading: const Icon(Icons.thumb_down, color: Colors.red),
-                      title: const Text('Report', style: TextStyle(color: Colors.red)),
-                      onTap: () {},
-                    ),
+                    ListTile(leading: const Icon(Icons.thumb_down, color: Colors.red), title: const Text('Report', style: TextStyle(color: Colors.red))),
                   ],
                 ),
               ),
@@ -329,28 +329,181 @@ class _ContactInfoScreenState extends State<ContactInfoScreen> {
     );
   }
 
-  Widget _buildInfoSection(ScreenThemeProvider themeProvider, {required Widget child}) {
-    return Container(
-      color: themeProvider.getColor('card'),
-      child: child,
+  void _showCollaborativeAlbum(BuildContext context, ScreenThemeProvider themeProvider) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: themeProvider.getColor('card'),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.8,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (context, scrollController) {
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Collaborative Album', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: themeProvider.getColor('text'))),
+                      IconButton(
+                        icon: Icon(Icons.add_a_photo, color: themeProvider.getColor('primary')),
+                        onPressed: () {
+                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Upload to Album feature coming soon!')));
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance.collection('groups').doc(widget.contactId).collection('album').snapshots(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                      final images = snapshot.data!.docs;
+                      if (images.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.photo_album_outlined, size: 60, color: themeProvider.getColor('textSecondary').withOpacity(0.3)),
+                              const SizedBox(height: 10),
+                              Text('No photos yet', style: TextStyle(color: themeProvider.getColor('textSecondary'))),
+                            ],
+                          ),
+                        );
+                      }
+                      
+                      return GridView.builder(
+                        controller: scrollController,
+                        padding: const EdgeInsets.all(10),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, crossAxisSpacing: 5, mainAxisSpacing: 5),
+                        itemCount: images.length,
+                        itemBuilder: (context, index) {
+                          final data = images[index].data() as Map<String, dynamic>;
+                          return Image.network(data['url'], fit: BoxFit.cover);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
-  Widget _buildInfoTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    VoidCallback? onTap,
-    required ScreenThemeProvider themeProvider,
-  }) {
-    return ListTile(
-      leading: Padding(
-        padding: const EdgeInsets.only(top: 8.0),
-        child: Icon(icon, color: themeProvider.getColor('textSecondary')),
+  void _showTaskList(BuildContext context, ScreenThemeProvider themeProvider) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: themeProvider.getColor('card'),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.5,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (context, scrollController) {
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Shared Task List', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: themeProvider.getColor('text'))),
+                      IconButton(
+                        icon: Icon(Icons.add_circle, color: themeProvider.getColor('primary')),
+                        onPressed: () => _showAddTaskDialog(context, themeProvider),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance.collection('groups').doc(widget.contactId).collection('tasks').snapshots(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                      final tasks = snapshot.data!.docs;
+                      if (tasks.isEmpty) return Center(child: Text('No tasks yet', style: TextStyle(color: themeProvider.getColor('textSecondary'))));
+                      
+                      return ListView.builder(
+                        controller: scrollController,
+                        itemCount: tasks.length,
+                        itemBuilder: (context, index) {
+                          final task = tasks[index].data() as Map<String, dynamic>;
+                          final isDone = task['isDone'] ?? false;
+                          return CheckboxListTile(
+                            title: Text(task['title'] ?? '', style: TextStyle(color: themeProvider.getColor('text'), decoration: isDone ? TextDecoration.lineThrough : null)),
+                            value: isDone,
+                            onChanged: (v) {
+                              tasks[index].reference.update({'isDone': v});
+                            },
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showAddTaskDialog(BuildContext context, ScreenThemeProvider themeProvider) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: themeProvider.getColor('card'),
+        title: Text('New Task', style: TextStyle(color: themeProvider.getColor('text'))),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: TextStyle(color: themeProvider.getColor('text')),
+          decoration: const InputDecoration(hintText: 'What needs to be done?'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              if (controller.text.isNotEmpty) {
+                await FirebaseFirestore.instance.collection('groups').doc(widget.contactId).collection('tasks').add({
+                  'title': controller.text,
+                  'isDone': false,
+                  'createdAt': FieldValue.serverTimestamp(),
+                });
+                if (mounted) Navigator.pop(context);
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildInfoSection(ScreenThemeProvider themeProvider, {required Widget child}) {
+    return Container(color: themeProvider.getColor('card'), child: child);
+  }
+
+  Widget _buildInfoTile({required IconData icon, required String title, required String subtitle, VoidCallback? onTap, required ScreenThemeProvider themeProvider}) {
+    return ListTile(
+      leading: Icon(icon, color: themeProvider.getColor('textSecondary')),
       title: Text(title, style: TextStyle(color: themeProvider.getColor('textSecondary'), fontSize: 14)),
-      subtitle: Text(subtitle, style: TextStyle(color: themeProvider.getColor('text'), fontSize: 17)),
-      trailing: onTap != null ? Icon(Icons.edit, size: 20, color: themeProvider.getColor('primary')) : null,
+      subtitle: Text(subtitle, style: TextStyle(color: themeProvider.getColor('text'), fontSize: 16)),
+      trailing: onTap != null ? const Icon(Icons.edit, size: 20) : null,
       onTap: onTap,
     );
   }

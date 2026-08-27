@@ -14,6 +14,7 @@ import 'package:whatsapp_clone/screens/security_safety_screen.dart';
 import 'package:whatsapp_clone/screens/notes_to_self_screen.dart';
 import 'package:whatsapp_clone/screens/appearance_screen.dart';
 import 'wallet_screen.dart';
+import 'linked_devices_screen.dart';
 import 'marketplace_screen.dart';
 import 'discussion_rooms_screen.dart';
 import 'catalog_screen.dart';
@@ -140,6 +141,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Divider(indent: 56, height: 1, color: themeProvider.getColor('divider')),
                 _buildSettingsItem(themeProvider, Icons.storage_outlined, Colors.orange, 'Storage & Data', 'Network usage, auto-download', () {
                   Navigator.push(context, MaterialPageRoute(builder: (context) => StorageSettings()));
+                }),
+                Divider(indent: 56, height: 1, color: themeProvider.getColor('divider')),
+                _buildSettingsItem(themeProvider, Icons.devices_outlined, Colors.purple, 'Linked Devices', 'Multi-platform synchronization', () {
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => LinkedDevicesScreen()));
                 }),
                 Divider(indent: 56, height: 1, color: themeProvider.getColor('divider')),
                 _buildSettingsItem(themeProvider, Icons.payments_outlined, Colors.blueAccent, 'Payments', 'Wallet, airtime, history', () {

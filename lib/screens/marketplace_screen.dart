@@ -280,9 +280,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   void _showLocationFilter() {
     showModalBottomSheet(
       context: context,
+      backgroundColor: Provider.of<ScreenThemeProvider>(context, listen: false).getColor('card'),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) => ListView(
         children: _nigerianStates.map((s) => ListTile(
-          title: Text(s, style: const TextStyle(fontSize: 14)),
+          title: Text(s, style: TextStyle(fontSize: 14, color: Provider.of<ScreenThemeProvider>(context).getColor('text'))),
           selected: _selectedState == s,
           onTap: () {
             setState(() => _selectedState = s);
@@ -296,9 +298,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   void _showCategoryFilter() {
     showModalBottomSheet(
       context: context,
+      backgroundColor: Provider.of<ScreenThemeProvider>(context, listen: false).getColor('card'),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) => ListView(
         children: _categories.map((c) => ListTile(
-          title: Text(c, style: const TextStyle(fontSize: 14)),
+          title: Text(c, style: TextStyle(fontSize: 14, color: Provider.of<ScreenThemeProvider>(context).getColor('text'))),
           selected: _selectedCategory == c,
           onTap: () {
             setState(() => _selectedCategory = c);

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
-import 'package:whatsapp_clone/providers/screen_theme_provider.dart';
+import '../providers/screen_theme_provider.dart';
 
 class NotesToSelfScreen extends StatefulWidget {
   const NotesToSelfScreen({super.key});
@@ -12,7 +14,11 @@ class NotesToSelfScreen extends StatefulWidget {
 class _NotesToSelfScreenState extends State<NotesToSelfScreen> {
   String _selectedFilter = 'General';
   final List<String> _filters = ['General', 'Work', 'Personal', 'Ideas'];
-  final List<Map<String, String>> _notes = [];
+
+  @override
+  void initState() {
+    super.initState();
+  }
 
   void _addNote(ScreenThemeProvider themeProvider) {
     final noteController = TextEditingController();
@@ -42,16 +48,17 @@ class _NotesToSelfScreenState extends State<NotesToSelfScreen> {
               backgroundColor: themeProvider.getColor('primary'),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            onPressed: () {
+            onPressed: () async {
               if (noteController.text.isNotEmpty) {
-                setState(() {
-                  _notes.insert(0, {
+                final user = FirebaseAuth.instance.currentUser;
+                if (user != null) {
+                  await FirebaseFirestore.instance.collection('users').doc(user.uid).collection('notes').add({
                     'text': noteController.text,
                     'folder': _selectedFilter,
-                    'time': DateTime.now().toString().substring(11, 16),
+                    'time': DateTime.now().toIso8601String(),
                   });
-                });
-                Navigator.pop(context);
+                }
+                if (mounted) Navigator.pop(context);
               }
             },
             child: const Text('Add Note', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -68,8 +75,7 @@ class _NotesToSelfScreenState extends State<NotesToSelfScreen> {
     final secondaryTextColor = themeProvider.getColor('textSecondary');
     final primaryColor = themeProvider.getColor('primary');
     final cardColor = themeProvider.getColor('card');
-
-    final currentNotes = _notes.where((n) => n['folder'] == _selectedFilter).toList();
+    final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
       backgroundColor: themeProvider.getColor('scaffold'),
@@ -165,44 +171,57 @@ class _NotesToSelfScreenState extends State<NotesToSelfScreen> {
           ),
 
           Expanded(
-            child: currentNotes.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.note_alt_outlined, size: 80, color: secondaryTextColor.withOpacity(0.2)),
-                      const SizedBox(height: 16),
-                      Text('No notes in $_selectedFilter.', style: TextStyle(color: secondaryTextColor, fontSize: 16)),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: currentNotes.length,
-                  itemBuilder: (context, index) {
-                    final note = currentNotes[index];
-                    return Card(
-                      color: cardColor,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: BorderSide(color: themeProvider.getColor('divider').withOpacity(0.5)),
-                      ),
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                        title: Text(note['text']!, style: TextStyle(color: textColor, fontSize: 15)),
-                        subtitle: Padding(
-                          padding: const EdgeInsets.only(top: 8.0),
-                          child: Text(note['time']!, style: TextStyle(color: secondaryTextColor, fontSize: 11)),
+            child: user == null 
+              ? const Center(child: Text('Login to see notes'))
+              : StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance.collection('users').doc(user.uid).collection('notes').where('folder', isEqualTo: _selectedFilter).snapshots(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                    final currentNotes = snapshot.data!.docs;
+
+                    if (currentNotes.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.note_alt_outlined, size: 80, color: secondaryTextColor.withOpacity(0.2)),
+                            const SizedBox(height: 16),
+                            Text('No notes in $_selectedFilter.', style: TextStyle(color: secondaryTextColor, fontSize: 16)),
+                          ],
                         ),
-                        trailing: IconButton(
-                          icon: Icon(Icons.delete_outline, size: 20, color: Colors.red.withOpacity(0.6)),
-                          onPressed: () => setState(() => _notes.remove(note)),
-                        ),
-                      ),
+                      );
+                    }
+
+                    return ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: currentNotes.length,
+                      itemBuilder: (context, index) {
+                        final noteDoc = currentNotes[index];
+                        final note = noteDoc.data() as Map<String, dynamic>;
+                        return Card(
+                          color: cardColor,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            side: BorderSide(color: themeProvider.getColor('divider').withOpacity(0.5)),
+                          ),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                            title: Text(note['text']!, style: TextStyle(color: textColor, fontSize: 15)),
+                            subtitle: Padding(
+                              padding: const EdgeInsets.only(top: 8.0),
+                              child: Text(note['time'] != null ? note['time'].toString().substring(11, 16) : '', style: TextStyle(color: secondaryTextColor, fontSize: 11)),
+                            ),
+                            trailing: IconButton(
+                              icon: Icon(Icons.delete_outline, size: 20, color: Colors.red.withOpacity(0.6)),
+                              onPressed: () => noteDoc.reference.delete(),
+                            ),
+                          ),
+                        );
+                      },
                     );
-                  },
+                  }
                 ),
           ),
         ],

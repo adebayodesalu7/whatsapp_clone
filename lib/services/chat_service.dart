@@ -1,9 +1,52 @@
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'encryption_service.dart';
 
 class ChatService {
+  static final ChatService _instance = ChatService._internal();
+  factory ChatService() => _instance;
+  ChatService._internal();
+
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final String _encryptionKey = 'ChatAppSecretKey2024!@#';
+
+  bool _isOnline = true; 
+
+  void setOnlineStatus(bool online) {
+    _isOnline = online;
+    if (_isOnline) {
+      _syncPendingMessages();
+    }
+  }
+
+  bool get isOnline => _isOnline;
+
+  Future<void> _syncPendingMessages() async {
+    final prefs = await SharedPreferences.getInstance();
+    final pendingJson = prefs.getStringList('pending_messages') ?? [];
+    if (pendingJson.isEmpty) return;
+
+    print('🔄 Syncing ${pendingJson.length} pending messages from storage...');
+    
+    List<String> remaining = [];
+    for (var jsonStr in pendingJson) {
+      final msg = json.decode(jsonStr);
+      try {
+        await sendMessage(
+          msg['receiverId'], 
+          msg['message'], 
+          isGroup: msg['isGroup'] ?? false,
+          isEncrypted: msg['isEncrypted'] ?? false,
+        );
+      } catch (e) {
+        remaining.add(jsonStr);
+      }
+    }
+    await prefs.setStringList('pending_messages', remaining);
+  }
 
   String getChatId(String user1Id, String user2Id) {
     List<String> ids = [user1Id, user2Id];
@@ -15,16 +58,32 @@ class ChatService {
     return _auth.currentUser?.uid;
   }
 
-  Future<void> sendMessage(String receiverId, String message, {bool isGroup = false, String? replyTo, int? disappearingTimer}) async {
+  Future<void> sendMessage(String receiverId, String message, {bool isGroup = false, String? replyTo, int? disappearingTimer, bool isEncrypted = false}) async {
     final currentUser = _auth.currentUser;
     if (currentUser == null) return;
 
+    if (!_isOnline) {
+      print('📴 Offline: Saving message to persistent queue...');
+      final prefs = await SharedPreferences.getInstance();
+      final pending = prefs.getStringList('pending_messages') ?? [];
+      pending.add(json.encode({
+        'receiverId': receiverId,
+        'message': message,
+        'isGroup': isGroup,
+        'isEncrypted': isEncrypted,
+        'timestamp': DateTime.now().toIso8601String(),
+      }));
+      await prefs.setStringList('pending_messages', pending);
+      return;
+    }
+
     final chatId = isGroup ? receiverId : getChatId(currentUser.uid, receiverId);
+    final encryptedMessage = isEncrypted ? message : EncryptionService.encrypt(message, _encryptionKey);
 
     final messageData = {
       'senderId': currentUser.uid,
       'receiverId': receiverId,
-      'message': message,
+      'message': encryptedMessage,
       'type': 'text',
       'timestamp': FieldValue.serverTimestamp(),
       'read': false,
@@ -38,7 +97,7 @@ class ChatService {
     await _firestore.collection('chats').doc(chatId).collection('messages').add(messageData);
 
     await _firestore.collection('chats').doc(chatId).set({
-      'lastMessage': message,
+      'lastMessage': encryptedMessage,
       'lastMessageTime': FieldValue.serverTimestamp(),
       'lastSenderId': currentUser.uid,
       'participants': isGroup ? null : [currentUser.uid, receiverId],
@@ -46,7 +105,7 @@ class ChatService {
     }, SetOptions(merge: true));
   }
 
-  Future<void> sendImageMessage(String receiverId, String imageUrl, bool isGroup, {bool isViewOnce = false}) async {
+  Future<void> sendImageMessage(String receiverId, String imageUrl, {bool isGroup = false, bool isViewOnce = false}) async {
     final currentUser = _auth.currentUser;
     if (currentUser == null) return;
     final chatId = isGroup ? receiverId : getChatId(currentUser.uid, receiverId);
@@ -66,7 +125,6 @@ class ChatService {
     final currentUser = _auth.currentUser;
     if (currentUser == null) return;
     final chatId = isGroup ? receiverId : getChatId(currentUser.uid, receiverId);
-
     await _firestore.collection('chats').doc(chatId).collection('messages').add({
       'senderId': currentUser.uid,
       'receiverId': receiverId,
@@ -81,7 +139,6 @@ class ChatService {
     final currentUser = _auth.currentUser;
     if (currentUser == null) return;
     final chatId = isGroup ? receiverId : getChatId(currentUser.uid, receiverId);
-
     await _firestore.collection('chats').doc(chatId).collection('messages').add({
       'senderId': currentUser.uid,
       'receiverId': receiverId,
@@ -96,7 +153,6 @@ class ChatService {
     final currentUser = _auth.currentUser;
     if (currentUser == null) return;
     final chatId = isGroup ? receiverId : getChatId(currentUser.uid, receiverId);
-
     await _firestore.collection('chats').doc(chatId).collection('messages').add({
       'senderId': currentUser.uid,
       'receiverId': receiverId,
@@ -112,7 +168,6 @@ class ChatService {
     final currentUser = _auth.currentUser;
     if (currentUser == null) return;
     final chatId = isGroup ? receiverId : getChatId(currentUser.uid, receiverId);
-
     await _firestore.collection('chats').doc(chatId).collection('messages').add({
       'senderId': currentUser.uid,
       'receiverId': receiverId,
@@ -124,11 +179,10 @@ class ChatService {
     });
   }
 
-  Future<void> sendInvoiceMessage(String receiverId, Map<String, dynamic> invoice) async {
+  Future<void> sendInvoiceMessage(String receiverId, Map<String, dynamic> invoice, {bool isGroup = false}) async {
     final currentUser = _auth.currentUser;
     if (currentUser == null) return;
-    final chatId = getChatId(currentUser.uid, receiverId);
-
+    final chatId = isGroup ? receiverId : getChatId(currentUser.uid, receiverId);
     await _firestore.collection('chats').doc(chatId).collection('messages').add({
       'senderId': currentUser.uid,
       'receiverId': receiverId,
@@ -140,17 +194,40 @@ class ChatService {
     });
   }
 
-  Future<void> sendCryptoPayment(String receiverId, double amount, String currency, String txHash) async {
+  Future<void> sendSplitBillMessage(String receiverId, Map<String, dynamic> splitData, bool isGroup) async {
     final currentUser = _auth.currentUser;
     if (currentUser == null) return;
+    final chatId = isGroup ? receiverId : getChatId(currentUser.uid, receiverId);
+    await _firestore.collection('chats').doc(chatId).collection('messages').add({
+      'senderId': currentUser.uid,
+      'receiverId': receiverId,
+      'message': '💸 Split Bill',
+      'type': 'split_bill',
+      'metadata': splitData,
+      'timestamp': FieldValue.serverTimestamp(),
+      'read': false,
+    });
+  }
+
+  Future<void> sendAjoInvitation(String receiverId, Map<String, dynamic> ajoData) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) return;
+    
     final chatId = getChatId(currentUser.uid, receiverId);
+    
+    await _firestore.collection('chats').doc(chatId).set({
+      'participants': [currentUser.uid, receiverId],
+      'lastMessage': '📩 Ajo Group Invitation',
+      'lastMessageTime': FieldValue.serverTimestamp(),
+      'isGroup': false,
+    }, SetOptions(merge: true));
 
     await _firestore.collection('chats').doc(chatId).collection('messages').add({
       'senderId': currentUser.uid,
       'receiverId': receiverId,
-      'message': '💸 Paid $amount $currency',
-      'type': 'crypto_payment',
-      'metadata': {'amount': amount, 'currency': currency, 'txHash': txHash},
+      'message': 'Invitation to join Ajo: ${ajoData['name']}',
+      'type': 'ajo_invitation',
+      'metadata': ajoData,
       'timestamp': FieldValue.serverTimestamp(),
       'read': false,
     });
@@ -166,7 +243,6 @@ class ChatService {
     final currentUser = _auth.currentUser;
     if (currentUser == null) return;
     final chatId = isGroup ? receiverId : getChatId(currentUser.uid, receiverId);
-
     await _firestore.collection('chats').doc(chatId).collection('messages').add({
       'senderId': currentUser.uid,
       'receiverId': receiverId,
@@ -183,7 +259,6 @@ class ChatService {
     final currentUser = _auth.currentUser;
     if (currentUser == null) return;
     final chatId = isGroup ? receiverId : getChatId(currentUser.uid, receiverId);
-
     await _firestore.collection('chats').doc(chatId).collection('messages').add({
       'senderId': currentUser.uid,
       'receiverId': receiverId,
@@ -211,65 +286,25 @@ class ChatService {
     await _firestore.collection('channels').doc(channelId).update(data);
   }
 
+  Future<void> promoteToAdmin(String channelId, String userId) async {
+    await _firestore.collection('channels').doc(channelId).update({
+      'admins': FieldValue.arrayUnion([userId])
+    });
+  }
+
+  Future<void> deleteChannel(String channelId) async {
+    await _firestore.collection('channels').doc(channelId).delete();
+  }
+
   Stream<QuerySnapshot> getMessages(String receiverId, {bool isGroup = false}) {
     final currentUser = _auth.currentUser;
     if (currentUser == null) return const Stream.empty();
     final chatId = isGroup ? receiverId : getChatId(currentUser.uid, receiverId);
-
     return _firestore
         .collection('chats')
         .doc(chatId)
         .collection('messages')
         .orderBy('timestamp', descending: true)
-        .snapshots();
-  }
-
-  Future<void> markMessagesAsRead(String receiverId, {bool isGroup = false}) async {
-    final currentUser = _auth.currentUser;
-    if (currentUser == null) return;
-    final chatId = isGroup ? receiverId : getChatId(currentUser.uid, receiverId);
-
-    final messages = await _firestore
-        .collection('chats')
-        .doc(chatId)
-        .collection('messages')
-        .where('receiverId', isEqualTo: currentUser.uid)
-        .where('read', isEqualTo: false)
-        .get();
-
-    for (var doc in messages.docs) {
-      await doc.reference.update({'read': true});
-    }
-  }
-
-  Future<void> clearChat(String receiverId, {bool isGroup = false}) async {
-    final currentUser = _auth.currentUser;
-    if (currentUser == null) return;
-    final chatId = isGroup ? receiverId : getChatId(currentUser.uid, receiverId);
-
-    final messages = await _firestore.collection('chats').doc(chatId).collection('messages').get();
-    for (var doc in messages.docs) {
-      await doc.reference.delete();
-    }
-  }
-
-  Future<void> pinMessage(String receiverId, String messageId, bool pin, bool isGroup) async {
-    final currentUser = _auth.currentUser;
-    if (currentUser == null) return;
-    final chatId = isGroup ? receiverId : getChatId(currentUser.uid, receiverId);
-    await _firestore.collection('chats').doc(chatId).collection('messages').doc(messageId).update({'isPinned': pin});
-  }
-
-  Stream<QuerySnapshot> getPinnedMessages(String receiverId, bool isGroup) {
-    final currentUser = _auth.currentUser;
-    if (currentUser == null) return const Stream.empty();
-    final chatId = isGroup ? receiverId : getChatId(currentUser.uid, receiverId);
-
-    return _firestore
-        .collection('chats')
-        .doc(chatId)
-        .collection('messages')
-        .where('isPinned', isEqualTo: true)
         .snapshots();
   }
 
@@ -287,6 +322,25 @@ class ChatService {
     await _firestore.collection('chats').doc(chatId).update({'isPinned': pin});
   }
 
+  Future<void> pinMessage(String receiverId, String messageId, bool pin, bool isGroup) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) return;
+    final chatId = isGroup ? receiverId : getChatId(currentUser.uid, receiverId);
+    await _firestore.collection('chats').doc(chatId).collection('messages').doc(messageId).update({'isPinned': pin});
+  }
+
+  Stream<QuerySnapshot> getPinnedMessages(String receiverId, bool isGroup) {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) return const Stream.empty();
+    final chatId = isGroup ? receiverId : getChatId(currentUser.uid, receiverId);
+    return _firestore
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .where('isPinned', isEqualTo: true)
+        .snapshots();
+  }
+
   Future<void> toggleFollowChannel(String channelId, bool follow) async {
      final currentUser = _auth.currentUser;
      if (currentUser == null) return;
@@ -301,17 +355,29 @@ class ChatService {
      }
   }
 
-  Future<void> promoteToAdmin(String channelId, String userId) async {
-    await _firestore.collection('channels').doc(channelId).update({
-      'admins': FieldValue.arrayUnion([userId])
-    });
+  Future<void> markMessagesAsRead(String receiverId, {bool isGroup = false}) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) return;
+    final chatId = isGroup ? receiverId : getChatId(currentUser.uid, receiverId);
+    final messages = await _firestore
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .where('receiverId', isEqualTo: currentUser.uid)
+        .where('read', isEqualTo: false)
+        .get();
+    for (var doc in messages.docs) {
+      await doc.reference.update({'read': true});
+    }
   }
 
-  Future<void> deleteChannel(String channelId) async {
-    await _firestore.collection('channels').doc(channelId).delete();
-  }
-
-  Future<void> processAjoContribution(String ajoId, String userId, double amount) async {
-    print("Processed Ajo contribution: $amount for $userId in $ajoId");
+  Future<void> clearChat(String receiverId, {bool isGroup = false}) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) return;
+    final chatId = isGroup ? receiverId : getChatId(currentUser.uid, receiverId);
+    final messages = await _firestore.collection('chats').doc(chatId).collection('messages').get();
+    for (var doc in messages.docs) {
+      await doc.reference.delete();
+    }
   }
 }

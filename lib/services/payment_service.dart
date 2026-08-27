@@ -1,12 +1,13 @@
 import 'dart:async';
+import 'package:flutter/material.dart';
 import '../models/models.dart';
 
-class PaymentService {
+class PaymentService extends ChangeNotifier {
   static final PaymentService _instance = PaymentService._internal();
   factory PaymentService() => _instance;
   PaymentService._internal();
 
-  double _balance = 1250.75;
+  double _balance = 12500.00; // Starting with a decent test balance
   final List<Transaction> _transactions = [
     Transaction(
       id: '1',
@@ -22,17 +23,23 @@ class PaymentService {
       recipient: 'MTN Airtime',
       timestamp: DateTime.now().subtract(const Duration(hours: 5)),
     ),
-    Transaction(
-      id: '3',
-      type: 'ajo',
-      amount: 2500.0,
-      recipient: 'Lagos Savings Group',
-      timestamp: DateTime.now().subtract(const Duration(days: 3)),
-    ),
   ];
 
   double get balance => _balance;
   List<Transaction> get transactions => List.unmodifiable(_transactions);
+
+  Future<void> topUp(double amount) async {
+    await Future.delayed(const Duration(seconds: 1)); // Simulate network
+    _balance += amount;
+    _transactions.insert(0, Transaction(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      type: 'receive',
+      amount: amount,
+      recipient: 'Wallet Top-up',
+      timestamp: DateTime.now(),
+    ));
+    notifyListeners();
+  }
 
   Future<bool> sendMoney(String recipient, double amount) async {
     await Future.delayed(const Duration(seconds: 1));
@@ -48,6 +55,7 @@ class PaymentService {
           timestamp: DateTime.now(),
         ),
       );
+      notifyListeners();
       return true;
     }
     return false;
@@ -67,6 +75,27 @@ class PaymentService {
           timestamp: DateTime.now(),
         ),
       );
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> contributeToAjo(String groupName, double amount) async {
+    await Future.delayed(const Duration(seconds: 1));
+    if (_balance >= amount) {
+      _balance -= amount;
+      _transactions.insert(
+        0,
+        Transaction(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          type: 'ajo',
+          amount: amount,
+          recipient: groupName,
+          timestamp: DateTime.now(),
+        ),
+      );
+      notifyListeners();
       return true;
     }
     return false;

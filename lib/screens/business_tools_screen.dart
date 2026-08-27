@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../providers/screen_theme_provider.dart';
 import '../services/business_service.dart';
+import '../services/ai_service.dart';
 import '../models/models.dart';
 import 'wallet_screen.dart';
 import 'notes_to_self_screen.dart';
@@ -44,7 +45,7 @@ class BusinessToolsScreen extends StatelessWidget {
                   Tab(icon: Icon(Icons.inventory_2_outlined, size: 24), text: 'Catalog'),
                   Tab(icon: Icon(Icons.calendar_month_outlined, size: 24), text: 'Orders'),
                   Tab(icon: Icon(Icons.analytics_outlined, size: 24), text: 'Analytics'),
-                  Tab(icon: Icon(Icons.campaign_outlined, size: 24), text: 'Ads'),
+                  Tab(icon: Icon(Icons.psychology_outlined, size: 24), text: 'AI Advisor'),
                 ],
               ),
             ),
@@ -55,7 +56,7 @@ class BusinessToolsScreen extends StatelessWidget {
                   CatalogTab(),
                   OrdersTab(),
                   AnalyticsTab(),
-                  AdsTab(),
+                  AIAdvisorTab(),
                 ],
               ),
             ),
@@ -263,45 +264,97 @@ class AnalyticsTab extends StatelessWidget {
   }
 }
 
-class AdsTab extends StatelessWidget {
-  const AdsTab({super.key});
+class AIAdvisorTab extends StatefulWidget {
+  const AIAdvisorTab({super.key});
+
+  @override
+  State<AIAdvisorTab> createState() => _AIAdvisorTabState();
+}
+
+class _AIAdvisorTabState extends State<AIAdvisorTab> {
+  final TextEditingController _queryController = TextEditingController();
+  String _advice = "Ask me anything about growing your business in Nigeria!";
+  bool _isLoading = false;
+
+  void _getAdvice() async {
+    if (_queryController.text.isEmpty) return;
+    setState(() => _isLoading = true);
+    final advice = await AIService().getBusinessAdvice(_queryController.text);
+    setState(() {
+      _advice = advice;
+      _isLoading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ScreenThemeProvider>(context);
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Container(
+    final theme = Provider.of<ScreenThemeProvider>(context);
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: [
+          Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(15)),
-            child: const Row(
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: Colors.blue.withOpacity(0.3)),
+            ),
+            child: Row(
               children: [
-                Icon(Icons.lightbulb_outline, color: Colors.blue),
-                SizedBox(width: 12),
-                Expanded(child: Text('Boost your items to the "Featured Deals" section for 2x more visibility.', style: TextStyle(fontSize: 12))),
+                const Icon(Icons.psychology, color: Colors.blue, size: 30),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'AI-powered business advice for African vendors.',
+                    style: TextStyle(color: theme.getColor('text'), fontWeight: FontWeight.w500),
+                  ),
+                ),
               ],
             ),
           ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: 2,
-            itemBuilder: (context, index) => BusinessToolCard(
-              title: index == 0 ? 'Toyota Camry 2022' : 'Modern Sofa Set',
-              subtitle: 'Boost Status: Inactive',
-              icon: Icons.campaign,
-              iconColor: Colors.blue,
-              themeProvider: themeProvider,
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('🚀 Ad boosting service pending payment...')));
-              },
+          const SizedBox(height: 20),
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: theme.getColor('card'),
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: SingleChildScrollView(
+                child: _isLoading 
+                  ? const Center(child: CircularProgressIndicator()) 
+                  : Text(_advice, style: TextStyle(color: theme.getColor('text'), fontSize: 15, height: 1.5)),
+              ),
             ),
           ),
-        ),
-      ],
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _queryController,
+                  style: TextStyle(color: theme.getColor('text')),
+                  decoration: InputDecoration(
+                    hintText: 'e.g. How to attract customers in Kano?',
+                    hintStyle: TextStyle(color: theme.getColor('textSecondary').withOpacity(0.5)),
+                    filled: true,
+                    fillColor: theme.getColor('inputFill'),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              IconButton(
+                onPressed: _getAdvice,
+                icon: const Icon(Icons.send, color: Colors.blue),
+                style: IconButton.styleFrom(backgroundColor: Colors.blue.withOpacity(0.1)),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,0 +1,64 @@
+TITAN CHATAPP - COMPLETE FEATURE OUTLINE
+
+1. CORE COMMUNICATION SUITE
+---------------------------
+* Real-Time Messaging: Instant text messaging with delivery and read receipts (single and double ticks).
+* Multimedia Sharing: Send and receive high-quality images, videos, and documents (PDFs, Docs).
+* Voice Notes: Integrated audio recorder with waveform visualization.
+* Voice & Video Call Logs: Dashboard to track incoming, outgoing, and missed calls.
+* Group Conversations: Create and manage groups with "Active" status indicators for members.
+* Broadcast Channels: Follow favorite creators and businesses for one-way updates.
+* Contact Management: Sync with phone contacts to find friends automatically.
+
+2. TITAN AI ECOSYSTEM
+---------------------
+* AI Image-to-Video: Transform static images into dynamic, zooming AI video previews in-chat.
+* AI Business Bot: Automated assistant for customer inquiries and away-mode auto-replies.
+* Smart AI Search: Contextual search that understands user intent.
+* AI Auto-Tagging: Detects objects in marketplace photos (e.g., "Car", "Electronics") automatically.
+* AI Content Moderation: Built-in safety shield (AWS Rekognition) to block inappropriate content.
+* Google Translation: Auto-translate chat messages and tags into multiple languages.
+
+3. MARKETPLACE & BUSINESS TOOLS
+-------------------------------
+* Peer-to-Peer Commerce: List products for sale with multi-photo support and categories.
+* Secure Titan Escrow: Built-in safety layer holding payments until buyer confirmation.
+* Smart Pricing: Professional currency formatting (e.g., N1,200,000) with real-time input masking.
+* AR Product Preview: "View in your Room" feature to visualize products using Augmented Reality.
+* Seller Dashboard: Manage listings with Edit and Delete functionality for owners.
+* Invoicing System: Generate and send professional invoices directly within chat threads.
+* Business Profiling: Specialized tools for business accounts and catalogs.
+
+4. FINTECH & SOCIAL SAVINGS
+---------------------------
+* Integrated Wallet: Manage funds, track transaction history, and perform wallet-to-wallet transfers.
+* Ajo Savings Groups: Digital rotatory savings circles (Ajo/Esusu) with automated payout tracking.
+* Airtime & Utility Payments: Purchase airtime and pay bills directly from the wallet.
+* Crypto Integration: Support for Web3-based payments and wallet addresses.
+
+5. PRIVACY & ELITE SECURITY
+---------------------------
+* Screenshot Prevention: Blocks screenshots and screen recordings in private chats.
+* Biometric App Lock: Secure the app using Fingerprint or Face ID via Credential Manager.
+* Stealth Mode: Hide "Online" status and read receipts while browsing.
+* Disappearing Messages: Automated self-destruct timers (24h, 7 days, 90 days).
+* Emergency SOS: One-tap button to share live location and record 30s of emergency audio.
+* Locked Chats: Use biometrics to hide and secure specific sensitive conversations.
+
+6. PERSONALIZATION & UI
+-----------------------
+* Titan Elite Status: Exclusive animated profile badges and priority support for verified users.
+* Advanced Themes: Light, Dark, and specialized OLED Black mode.
+* Bubble Roundness: Customizable message bubble shape (0px to 30px).
+* Chat Wallpapers: Cloudinary-hosted background library for chat threads.
+* Global Font Customization: Adjustable font sizes and multiple premium typefaces.
+* Icon-Only Navigation: Clean, modern bottom navigation bar without text clutter.
+* Glassmorphism UI: Optional blur effects for AppBars and navigation elements.
+
+TECHNICAL SPECS
+---------------
+* Platform: Flutter (Cross-platform)
+* Backend: Firebase (Auth, Firestore, Cloud Functions)
+* Media: Cloudinary AI & Storage
+* Target Android API: 36 (Android 15)
+* Minimum Android Version: 5.0 (API 21)

@@ -17,6 +17,8 @@ import 'package:whatsapp_clone/screens/wallet_screen.dart';
 import 'package:whatsapp_clone/screens/ajo_group_screen.dart';
 import 'package:whatsapp_clone/screens/airtime_purchase_screen.dart';
 
+import 'package:whatsapp_clone/services/payment_service.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
@@ -28,6 +30,7 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ScreenThemeProvider()),
+        ChangeNotifierProvider(create: (_) => PaymentService()),
       ],
       child: const WhatsappCloneApp(),
     ),

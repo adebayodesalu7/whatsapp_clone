@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import 'package:whatsapp_clone/services/chat_service.dart';
 import 'package:whatsapp_clone/providers/screen_theme_provider.dart';
 import 'package:whatsapp_clone/widgets/avatar.dart';
@@ -393,10 +394,15 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       final isMe = lastSenderId == _auth.currentUser!.uid;
 
                       final lastTime = (data['lastMessageTime'] as Timestamp?)?.toDate();
-                      final timeStr = lastTime != null ? "${lastTime.hour.toString().padLeft(2, '0')}:${lastTime.minute.toString().padLeft(2, '0')}" : '';
+                      final timeStr = lastTime != null ? DateFormat('HH:mm').format(lastTime) : '';
+                      final unreadCountData = data['unreadCount'];
+                      int unreadCount = 0;
+                      if (unreadCountData is Map) {
+                        unreadCount = unreadCountData[_auth.currentUser!.uid] ?? 0;
+                      }
 
                       return ListTile(
-                        leading: Avatar(name: name, imageUrl: photoUrl, size: 45, isTitanElite: isTitanElite),
+                        leading: Avatar(name: name, imageUrl: photoUrl, size: 50, isTitanElite: isTitanElite),
                         title: Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
                         subtitle: Row(
                           children: [
@@ -420,9 +426,18 @@ class _ChatListScreenState extends State<ChatListScreen> {
                         ),
                         trailing: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text(timeStr, style: TextStyle(color: secondaryTextColor, fontSize: 12)),
-                            if (isPinned) const Icon(Icons.push_pin, size: 16, color: Colors.grey),
+                            Text(timeStr, style: TextStyle(color: unreadCount > 0 ? themeProvider.getColor('primary') : secondaryTextColor, fontSize: 12)),
+                            const SizedBox(height: 4),
+                            if (unreadCount > 0)
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(color: themeProvider.getColor('primary'), shape: BoxShape.circle),
+                                child: Text('$unreadCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                              )
+                            else if (isPinned) 
+                              const Icon(Icons.push_pin, size: 16, color: Colors.grey),
                           ],
                         ),
                         onTap: () {
