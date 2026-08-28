@@ -90,27 +90,48 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
             ),
           ),
           if (widget.isAdmin)
-            Container(
-              padding: const EdgeInsets.all(8),
-              color: isDark ? Colors.grey.shade900 : Colors.white,
-              child: Row(
+            SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _messageController,
-                      style: TextStyle(color: textColor),
-                      decoration: InputDecoration(
-                        hintText: 'Broadcast to channel...',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none),
-                        filled: true,
-                        fillColor: themeProvider.getColor('scaffold'),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-                      ),
+                  _buildFormattingToolbar(),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    color: isDark ? Colors.grey.shade900 : Colors.white,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: Container(
+                            constraints: BoxConstraints(
+                              maxHeight: MediaQuery.of(context).size.height * 0.25,
+                            ),
+                            child: TextField(
+                              controller: _messageController,
+                              style: TextStyle(color: textColor),
+                              decoration: InputDecoration(
+                                hintText: 'Broadcast to channel...',
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none),
+                                filled: true,
+                                fillColor: themeProvider.getColor('scaffold'),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              ),
+                              maxLines: null,
+                              keyboardType: TextInputType.multiline,
+                              textInputAction: TextInputAction.newline,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        CircleAvatar(
+                          backgroundColor: themeProvider.getColor('primary'),
+                          child: IconButton(
+                            icon: const Icon(Icons.send, color: Colors.white, size: 20),
+                            onPressed: _sendMessage,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.send, color: themeProvider.getColor('primary')),
-                    onPressed: _sendMessage,
                   ),
                 ],
               ),
@@ -246,6 +267,51 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
         .update({'reactions': updated});
   }
 
+  Widget _buildFormattingToolbar({TextEditingController? controller}) {
+    final target = controller ?? _messageController;
+    return Container(
+      color: Colors.black.withOpacity(0.05),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _formatButton(Icons.format_bold, () => _applyFormat(target, '**', '**')),
+          _formatButton(Icons.format_italic, () => _applyFormat(target, '*', '*')),
+          _formatButton(Icons.format_list_bulleted, () => _applyFormat(target, '\n- ', '')),
+          _formatButton(Icons.format_list_numbered, () => _applyFormat(target, '\n1. ', '')),
+          _formatButton(Icons.title, () => _applyFormat(target, '### ', '')),
+          _formatButton(Icons.format_quote, () => _applyFormat(target, '> ', '')),
+        ],
+      ),
+    );
+  }
+
+  Widget _formatButton(IconData icon, VoidCallback onPressed) {
+    return IconButton(
+      icon: Icon(icon, size: 20, color: Colors.blue),
+      onPressed: onPressed,
+      constraints: const BoxConstraints(),
+      padding: const EdgeInsets.all(8),
+    );
+  }
+
+  void _applyFormat(TextEditingController controller, String prefix, String suffix) {
+    final text = controller.text;
+    final selection = controller.selection;
+    
+    if (selection.start == -1) {
+      controller.text = text + prefix + suffix;
+      return;
+    }
+
+    final selectedText = text.substring(selection.start, selection.end);
+    final newText = text.replaceRange(selection.start, selection.end, '$prefix$selectedText$suffix');
+    
+    controller.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: selection.start + prefix.length + selectedText.length + suffix.length),
+    );
+  }
+
   void _showEditMessageDialog(String messageId, String currentText, ScreenThemeProvider theme) {
     final controller = TextEditingController(text: currentText);
     showDialog(
@@ -253,9 +319,16 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
       builder: (context) => AlertDialog(
         backgroundColor: theme.getColor('card'),
         title: Text('Edit Broadcast', style: TextStyle(color: theme.getColor('text'))),
-        content: TextField(
-          controller: controller,
-          style: TextStyle(color: theme.getColor('text')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildFormattingToolbar(controller: controller),
+            TextField(
+              controller: controller,
+              style: TextStyle(color: theme.getColor('text')),
+              maxLines: null,
+            ),
+          ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),

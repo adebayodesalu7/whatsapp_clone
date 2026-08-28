@@ -107,70 +107,92 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
           ),
         ),
         SizedBox(
-          height: 120,
+          height: 125,
           child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance.collection('communities').snapshots(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-              final communities = snapshot.data!.docs;
-              
-              if (communities.isEmpty) {
-                return Center(
-                  child: Text("Join exclusive Titan communities", 
-                    style: TextStyle(fontSize: 12, color: secondaryTextColor.withOpacity(0.5))),
-                );
-              }
-              
-              return ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: communities.length,
-                itemBuilder: (context, index) {
-                  final data = communities[index].data() as Map<String, dynamic>;
-                  final name = data['name'] ?? 'Community';
-                  return GestureDetector(
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => CommunityDetailScreen(communityId: communities[index].id))),
-                    child: Container(
-                      width: 90,
-                      margin: const EdgeInsets.only(right: 12),
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: themeProvider.getColor('primary').withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: themeProvider.getColor('primary').withOpacity(0.1)),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Stack(
-                            alignment: Alignment.center,
+            stream: FirebaseFirestore.instance.collection('channels').where('isElite', isEqualTo: true).snapshots(),
+            builder: (context, channelsSnap) {
+              return StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance.collection('communities').snapshots(),
+                builder: (context, communitiesSnap) {
+                  if (!channelsSnap.hasData && !communitiesSnap.hasData) return const Center(child: CircularProgressIndicator());
+                  
+                  final eliteChannels = channelsSnap.data?.docs ?? [];
+                  final communities = communitiesSnap.data?.docs ?? [];
+                  
+                  if (eliteChannels.isEmpty && communities.isEmpty) {
+                    return Center(
+                      child: Text("Premium Elite channels appear here.", 
+                        style: TextStyle(fontSize: 12, color: secondaryTextColor.withOpacity(0.5))),
+                    );
+                  }
+                  
+                  final List<dynamic> combinedItems = [...eliteChannels, ...communities];
+
+                  return ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: combinedItems.length,
+                    itemBuilder: (context, index) {
+                      final item = combinedItems[index];
+                      final bool isChannel = item.reference.path.startsWith('channels');
+                      final data = item.data() as Map<String, dynamic>;
+                      final name = data['name'] ?? 'Elite';
+                      
+                      return GestureDetector(
+                        onTap: () {
+                          if (isChannel) {
+                            final admins = List<String>.from(data['admins'] ?? []);
+                            final bool isAdmin = FirebaseAuth.instance.currentUser != null && 
+                                (admins.contains(FirebaseAuth.instance.currentUser!.uid) || data['createdBy'] == FirebaseAuth.instance.currentUser!.uid);
+                            Navigator.push(context, MaterialPageRoute(builder: (context) => ChannelChatScreen(channelId: item.id, channelName: name, isAdmin: isAdmin)));
+                          } else {
+                            Navigator.push(context, MaterialPageRoute(builder: (context) => CommunityDetailScreen(communityId: item.id)));
+                          }
+                        },
+                        child: Container(
+                          width: 100,
+                          margin: const EdgeInsets.only(right: 12, top: 4, bottom: 4),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: isChannel ? Colors.amber.withOpacity(0.05) : themeProvider.getColor('primary').withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(15),
+                            border: Border.all(color: isChannel ? Colors.amber.withOpacity(0.2) : themeProvider.getColor('primary').withOpacity(0.1)),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Avatar(name: name, size: 55, isTitanElite: true),
-                              Positioned(
-                                bottom: -1,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                  decoration: BoxDecoration(
-                                    color: Colors.amber.shade800,
-                                    borderRadius: BorderRadius.circular(8),
+                              Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  Avatar(name: name, size: 55, isTitanElite: true),
+                                  Positioned(
+                                    bottom: -2,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: isChannel ? Colors.amber.shade800 : themeProvider.getColor('primary'),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: Colors.black, width: 1),
+                                      ),
+                                      child: Text(isChannel ? 'ELITE' : 'TITAN', style: const TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.bold)),
+                                    ),
                                   ),
-                                  child: const Text('TITAN', style: TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.bold)),
-                                ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                name, 
+                                style: TextStyle(color: textColor, fontSize: 11, fontWeight: FontWeight.w900), 
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
                               ),
                             ],
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            name, 
-                            style: TextStyle(color: textColor, fontSize: 11, fontWeight: FontWeight.bold), 
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
+                        ),
+                      );
+                    },
                   );
-                },
+                }
               );
             },
           ),
@@ -178,7 +200,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Text(
-            'Communities are interactive hubs for real-time collaboration, networking, and exclusive Titan benefits.',
+            'Titan Elite are interactive hubs for real-time collaboration, networking, and exclusive premium benefits.',
             style: TextStyle(color: Colors.grey, fontSize: 11),
           ),
         ),
@@ -208,7 +230,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
           ),
         ),
         StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('channels').snapshots(),
+          stream: FirebaseFirestore.instance.collection('channels').where('isElite', isEqualTo: false).snapshots(),
           builder: (context, snapshot) {
             if (!snapshot.hasData) return const Padding(padding: EdgeInsets.all(12), child: Center(child: CircularProgressIndicator()));
             
