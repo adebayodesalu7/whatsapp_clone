@@ -1,0 +1,36 @@
+TITAN CHATAPP - SUPER-APP EVOLUTION ROADMAP
+
+Building the future of Nigerian Social Commerce and Savings.
+
+PROPOSED UPGRADES:
+
+1. TITAN AI VENDOR ASSISTANT (Marketplace Upgrade)
+   - AI Catalog Generator: Upload a product photo, and Titan AI generates a professional description, suggests a category, and identifies competitive pricing based on marketplace trends.
+   - AI Auto-Responder: Vendors can enable a "Business Bot" that handles inquiries (price, availability, size) automatically based on their active catalog.
+
+2. LOGISTICS & REAL-TIME TRACKING (Marketplace Upgrade)
+   - Titan Delivery Integration: Connect with local dispatch services (Gokada, Kwik, etc.).
+   - Live Tracking: Buyers can track their marketplace orders on a real-time map within the chat.
+   - Proof of Delivery: Secure QR-code handover system between dispatch rider and buyer to release Escrow funds.
+
+3. ADVANCED UTILITY HUB (Wallet Upgrade)
+   - Bill Payments: Beyond airtime, add Electricity (IKEDC/EKEDC), Cable TV (DSTV/GOTV), and Data bundles.
+   - Scan to Pay: QR code payment system for physical vendor stores using Titan Wallet.
+   - Micro-Loans: Social-backed peer-to-peer lending within verified Ajo groups (interest-free loans from the community pot).
+
+4. TITAN MOMENTS & SHOPPABLE STATUS (Social Upgrade)
+   - E-commerce Integration in Status: Users can tag their marketplace items in status updates. Viewers can click "Buy Now" directly from the Status/Story.
+   - Verified Business Profiles: Professional portfolios for vendors showing their "Trust Score", successful deliveries, and community reviews.
+
+5. PRIVACY & SECURITY ENHANCEMENTS (Core Upgrade)
+   - Stealth Mode: Per-contact privacy settings to hide "Online" status and "Blue Ticks" for specific users while keeping them for others.
+   - Encrypted Local Backup: Secure chat and transaction backup to personal Google Drive or local storage.
+   - Biometric Payment Confirmation: Require face/fingerprint ID for every wallet transaction above ₦5,000.
+
+6. COMMUNITY GOVERNANCE (Ajo Upgrade)
+   - Group Voting: Use the Polls feature to formally vote on Ajo rule changes (e.g., increasing contribution amount or skipping a turn).
+   - Social Guarantee: Members can "vouch" for new joiners in public Ajo groups, linking their own Trust Score to the new member's performance.
+
+---
+HOW TO PROCEED:
+Choose a number (1-6) to see a detailed implementation plan for that specific upgrade.
