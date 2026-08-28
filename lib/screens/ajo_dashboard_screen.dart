@@ -443,18 +443,11 @@ class _AjoDashboardScreenState extends State<AjoDashboardScreen> {
 
     String? email = user.email;
 
-    if (email == null || email.isEmpty) {
-      // Fetch phone number from Firestore if email is missing
-      final userDoc = await _firestore.collection('users').doc(_currentUserId).get();
-      final phoneNumber = userDoc.data()?['phoneNumber'] as String? ?? '';
-      if (phoneNumber.isNotEmpty) {
-        // Generate a virtual email for Paystack using the phone number
-        email = '${phoneNumber.replaceAll('+', '')}@titan-ajo.com';
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Phone number not found. Please update profile.')));
-        return;
-      }
+    if (email == null || email.isEmpty || email.contains('titan-ajo.com')) {
+      email = await _paystackService.promptForEmail(context, email);
     }
+
+    if (email == null || email.isEmpty) return;
 
     final reference = _paystackService.generateReference();
 

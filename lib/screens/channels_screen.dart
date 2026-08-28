@@ -231,7 +231,8 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                 final followers = List<String>.from(data['followers'] ?? []);
                 final admins = List<String>.from(data['admins'] ?? []);
                 final isFollowing = currentUser != null && followers.contains(currentUser.uid);
-                final isAdmin = currentUser != null && (admins.contains(currentUser.uid) || data['createdBy'] == currentUser.uid);
+                final bool isAdmin = currentUser != null && (admins.contains(currentUser.uid) || data['createdBy'] == currentUser.uid);
+                final bool isEliteChannel = data['isElite'] ?? false;
 
                 return ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
@@ -239,8 +240,14 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                   title: Row(
                     children: [
                       Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: textColor, fontSize: 14)),
-                      if (isAdmin) const SizedBox(width: 4),
-                      if (isAdmin) Icon(Icons.verified, color: themeProvider.getColor('primary'), size: 14),
+                      if (isEliteChannel) ...[
+                        const SizedBox(width: 4),
+                        const Icon(Icons.stars, color: Colors.amber, size: 14),
+                      ],
+                      if (isAdmin) ...[
+                        const SizedBox(width: 4),
+                        Icon(Icons.verified, color: themeProvider.getColor('primary'), size: 14),
+                      ],
                     ],
                   ),
                   subtitle: Text('$followersCount followers', style: TextStyle(color: secondaryTextColor, fontSize: 11)),
@@ -367,8 +374,14 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     
-    final email = user.email ?? '${user.phoneNumber?.replaceAll('+', '')}@titan-ajo.com';
     final paystack = PaystackService();
+    String? email = user.email;
+
+    if (email == null || email.isEmpty || email.contains('titan-ajo.com')) {
+      email = await paystack.promptForEmail(context, email);
+    }
+
+    if (email == null || email.isEmpty) return;
     
     showDialog(context: context, barrierDismissible: false, builder: (c) => const Center(child: CircularProgressIndicator()));
     
@@ -390,63 +403,104 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
   void _showCreateChannelDialog(BuildContext context, ScreenThemeProvider themeProvider) {
     final nameController = TextEditingController();
     final descController = TextEditingController();
+    bool isEliteToggle = false;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: themeProvider.getColor('card'),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: Text('Create New Channel', style: TextStyle(color: themeProvider.getColor('text'), fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: InputDecoration(
-                hintText: 'Channel Name',
-                hintStyle: TextStyle(color: themeProvider.getColor('textSecondary')),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              style: TextStyle(color: themeProvider.getColor('text')),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: themeProvider.getColor('card'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: Text('Create New Channel', style: TextStyle(color: themeProvider.getColor('text'), fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: InputDecoration(
+                    hintText: 'Channel Name',
+                    hintStyle: TextStyle(color: themeProvider.getColor('textSecondary')),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  style: TextStyle(color: themeProvider.getColor('text')),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: descController,
+                  decoration: InputDecoration(
+                    hintText: 'Description',
+                    hintStyle: TextStyle(color: themeProvider.getColor('textSecondary')),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  maxLines: 3,
+                  style: TextStyle(color: themeProvider.getColor('text')),
+                ),
+                const SizedBox(height: 16),
+                SwitchListTile(
+                  title: const Text('Elite Channel', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.amber)),
+                  subtitle: const Text('Premium channel for business. Fee: ₦10,000', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                  value: isEliteToggle,
+                  onChanged: (val) => setState(() => isEliteToggle = val),
+                  secondary: const Icon(Icons.workspace_premium, color: Colors.amber),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: descController,
-              decoration: InputDecoration(
-                hintText: 'Description',
-                hintStyle: TextStyle(color: themeProvider.getColor('textSecondary')),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () async {
+                if (nameController.text.isNotEmpty && FirebaseAuth.instance.currentUser != null) {
+                  final uid = FirebaseAuth.instance.currentUser!.uid;
+                  final user = FirebaseAuth.instance.currentUser!;
+
+                  if (isEliteToggle) {
+                    // Trigger Payment
+                    final paystack = PaystackService();
+                    String? email = user.email;
+                    if (email == null || email.isEmpty || email.contains('titan-ajo.com')) {
+                      email = await paystack.promptForEmail(context, email);
+                    }
+                    if (email == null || email.isEmpty) return;
+
+                    showDialog(context: context, barrierDismissible: false, builder: (c) => const Center(child: CircularProgressIndicator()));
+                    final response = await paystack.checkout(
+                      context: context,
+                      email: email,
+                      amount: 10000.0,
+                      reference: 'create_elite_${uid}_${DateTime.now().millisecondsSinceEpoch}',
+                    );
+                    if (context.mounted) Navigator.pop(context); // Close loading
+
+                    if (response == null || response['status'] != true) {
+                      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payment failed. Elite channel not created.')));
+                      return;
+                    }
+                  }
+
+                  await FirebaseFirestore.instance.collection('channels').add({
+                    'name': nameController.text,
+                    'description': descController.text,
+                    'followersCount': 1,
+                    'followers': [uid],
+                    'admins': [uid],
+                    'createdBy': uid,
+                    'isElite': isEliteToggle,
+                    'createdAt': FieldValue.serverTimestamp(),
+                  });
+                  if (context.mounted) Navigator.pop(context);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isEliteToggle ? Colors.amber.shade800 : themeProvider.getColor('primary'),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
-              maxLines: 3,
-              style: TextStyle(color: themeProvider.getColor('text')),
+              child: Text(isEliteToggle ? 'Pay & Create' : 'Create Channel', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              if (nameController.text.isNotEmpty && FirebaseAuth.instance.currentUser != null) {
-                final uid = FirebaseAuth.instance.currentUser!.uid;
-                await FirebaseFirestore.instance.collection('channels').add({
-                  'name': nameController.text,
-                  'description': descController.text,
-                  'followersCount': 1,
-                  'followers': [uid],
-                  'admins': [uid],
-                  'createdBy': uid,
-                  'createdAt': FieldValue.serverTimestamp(),
-                });
-                if (context.mounted) Navigator.pop(context);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: themeProvider.getColor('primary'),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text('Create Channel', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
       ),
     );
   }

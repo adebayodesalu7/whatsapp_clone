@@ -444,8 +444,15 @@ class PersonalSavingsDashboard extends StatelessWidget {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     
-    String email = user.email ?? '${user.phoneNumber?.replaceAll('+', '') ?? 'user'}@titan-ajo.com';
     final paystackService = PaystackService();
+    String? email = user.email;
+
+    if (email == null || email.isEmpty || email.contains('titan-ajo.com')) {
+      email = await paystackService.promptForEmail(context, email);
+    }
+
+    if (email == null || email.isEmpty) return;
+
     final reference = paystackService.generateReference();
 
     showDialog(context: context, barrierDismissible: false, builder: (c) => const Center(child: CircularProgressIndicator()));
@@ -487,8 +494,15 @@ class PersonalSavingsDashboard extends StatelessWidget {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     
-    String email = user.email ?? '${user.phoneNumber?.replaceAll('+', '') ?? 'user'}@titan-ajo.com';
     final paystackService = PaystackService();
+    String? email = user.email;
+
+    if (email == null || email.isEmpty || email.contains('titan-ajo.com')) {
+      email = await paystackService.promptForEmail(context, email);
+    }
+
+    if (email == null || email.isEmpty) return;
+
     final reference = 'ver_${const Uuid().v4()}';
 
     showDialog(context: context, barrierDismissible: false, builder: (c) => const Center(child: CircularProgressIndicator()));

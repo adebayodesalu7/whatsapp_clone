@@ -10,6 +10,53 @@ class PaystackService {
 
   PaystackService();
 
+  Future<String?> promptForEmail(BuildContext context, String? currentEmail) async {
+    // If we have a real email (not our virtual one), use it.
+    if (currentEmail != null && currentEmail.isNotEmpty && !currentEmail.endsWith('@titan-ajo.com')) {
+      return currentEmail;
+    }
+
+    final controller = TextEditingController();
+    return await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Email Address Required', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Paystack requires a valid email to process payments and send receipts.', style: TextStyle(fontSize: 13, color: Colors.grey)),
+            const SizedBox(height: 20),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.emailAddress,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'e.g. adebayo@gmail.com',
+                labelText: 'Email Address',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+          ElevatedButton(
+            onPressed: () {
+              final email = controller.text.trim();
+              if (email.contains('@') && email.contains('.') && email.length > 5) {
+                Navigator.pop(context, email);
+              }
+            },
+            style: ElevatedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            child: const Text('PROCEED'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<Map<String, dynamic>?> checkout({
     required BuildContext context,
     required String email,

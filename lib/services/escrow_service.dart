@@ -14,9 +14,16 @@ class EscrowService {
     required Function(String) onSuccess,
   }) async {
     try {
+      String? finalEmail = email;
+      if (finalEmail.isEmpty || finalEmail.contains('titan-ajo.com')) {
+        finalEmail = await _paystackService.promptForEmail(context, email);
+      }
+
+      if (finalEmail == null || finalEmail.isEmpty) return false;
+
       final response = await _paystackService.checkout(
         context: context,
-        email: email,
+        email: finalEmail,
         amount: amount,
         reference: reference,
       );
