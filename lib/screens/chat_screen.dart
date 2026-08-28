@@ -907,6 +907,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildTickIcon(Map<String, dynamic> data) {
+    bool isRead = data['read'] ?? false;
+    String status = data['status'] ?? 'sent';
+
+    if (isRead) {
+      return const Icon(Icons.done_all, size: 14, color: Colors.blue);
+    } else if (status == 'delivered') {
+      return const Icon(Icons.done_all, size: 14, color: Colors.grey);
+    } else {
+      return const Icon(Icons.done, size: 14, color: Colors.grey);
+    }
+  }
+
   Widget _buildMessageBubble(String messageId, Map<String, dynamic> data, bool isDark, Color textColor, Color secondaryTextColor) {
     final themeProvider = Provider.of<ScreenThemeProvider>(context, listen: false);
     final bool isMe = data['senderId'] == _currentUserId;
@@ -957,11 +970,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   ),
                   if (isMe) ...[
                     const SizedBox(width: 4),
-                    Icon(
-                      (data['read'] ?? false) ? Icons.done_all : Icons.done,
-                      size: 14,
-                      color: (data['read'] ?? false) ? Colors.blue : Colors.grey.shade600,
-                    ),
+                    _buildTickIcon(data),
                   ],
                   if (isPinned) ...[
                     const SizedBox(width: 4),

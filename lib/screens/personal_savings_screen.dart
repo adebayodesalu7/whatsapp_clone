@@ -282,6 +282,8 @@ class PersonalSavingsDashboard extends StatelessWidget {
                const SizedBox(height: 24),
                _buildStatsGrid(savings),
                const SizedBox(height: 24),
+               _buildSavingsAction(context, savings),
+               const SizedBox(height: 24),
                _buildActionCard(context, savings, canWithdraw),
                const SizedBox(height: 24),
                _buildNextOfKin(savings),
@@ -370,12 +372,147 @@ class PersonalSavingsDashboard extends StatelessWidget {
            const Text('Pay ₦500 signup fee to verify this account', style: TextStyle(color: Colors.grey, fontSize: 11)),
            const SizedBox(height: 16),
            ElevatedButton(
-             onPressed: savings.isVerified ? null : () {},
+             onPressed: savings.isVerified ? null : () => _payVerificationFee(context, savings),
              child: Text(savings.isVerified ? 'VERIFIED' : 'PAY ₦500 NOW'),
            ),
          ],
        ),
      );
+  }
+
+  Widget _buildSavingsAction(BuildContext context, PersonalSavings savings) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [Color(0xFF00A884), Color(0xFF25D366)]),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        children: [
+          const Text('Top up your savings circle', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () => _showAddSavingsDialog(context, savings),
+            icon: const Icon(Icons.add_card, color: Color(0xFF00A884)),
+            label: const Text('ADD SAVINGS', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF00A884))),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              minimumSize: const Size(double.infinity, 50),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddSavingsDialog(BuildContext context, PersonalSavings savings) {
+    final amountController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF111B21),
+        title: const Text('Add Savings', style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: amountController,
+          keyboardType: TextInputType.number,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            labelText: 'Amount (₦)',
+            labelStyle: TextStyle(color: Colors.grey),
+            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+          ElevatedButton(
+            onPressed: () {
+              final amount = double.tryParse(amountController.text) ?? 0.0;
+              if (amount > 0) {
+                Navigator.pop(context);
+                _processSavingsPayment(context, savings, amount);
+              }
+            },
+            child: const Text('PAY VIA PAYSTACK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _processSavingsPayment(BuildContext context, PersonalSavings savings, double amount) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    
+    String email = user.email ?? '${user.phoneNumber?.replaceAll('+', '') ?? 'user'}@titan-ajo.com';
+    final paystackService = PaystackService();
+    final reference = paystackService.generateReference();
+
+    showDialog(context: context, barrierDismissible: false, builder: (c) => const Center(child: CircularProgressIndicator()));
+
+    final response = await paystackService.checkout(
+      context: context,
+      email: email,
+      amount: amount,
+      reference: reference,
+    );
+
+    if (context.mounted) Navigator.pop(context);
+
+    if (response != null && response['status'] == true) {
+      await FirebaseFirestore.instance.collection('personal_savings').doc(savings.id).update({
+        'currentBalance': FieldValue.increment(amount),
+        'points': FieldValue.increment(5), // Reward on-time payment
+      });
+
+      // Record transaction
+      await FirebaseFirestore.instance.collection('personal_savings').doc(savings.id).collection('transactions').add({
+        'type': 'deposit',
+        'amount': amount,
+        'reference': reference,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✅ Successfully added ₦$amount to your savings!')));
+      }
+    } else {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ Payment failed: ${response?['message'] ?? 'Cancelled'}'), backgroundColor: Colors.red));
+      }
+    }
+  }
+
+  Future<void> _payVerificationFee(BuildContext context, PersonalSavings savings) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    
+    String email = user.email ?? '${user.phoneNumber?.replaceAll('+', '') ?? 'user'}@titan-ajo.com';
+    final paystackService = PaystackService();
+    final reference = 'ver_${const Uuid().v4()}';
+
+    showDialog(context: context, barrierDismissible: false, builder: (c) => const Center(child: CircularProgressIndicator()));
+
+    final response = await paystackService.checkout(
+      context: context,
+      email: email,
+      amount: 500.0,
+      reference: reference,
+    );
+
+    if (context.mounted) Navigator.pop(context);
+
+    if (response != null && response['status'] == true) {
+      await FirebaseFirestore.instance.collection('personal_savings').doc(savings.id).update({
+        'isVerified': true,
+        'tier': 2,
+        'points': FieldValue.increment(50),
+      });
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Account verified! You are now Tier 2.')));
+      }
+    }
   }
 
   Widget _buildNextOfKin(PersonalSavings savings) {

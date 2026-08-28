@@ -7,9 +7,19 @@ import 'package:whatsapp_clone/services/chat_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:whatsapp_clone/screens/channel_chat_screen.dart';
 import 'package:whatsapp_clone/screens/community_detail_screen.dart';
+import 'package:whatsapp_clone/services/paystack_service.dart';
 
-class ChannelsScreen extends StatelessWidget {
+class ChannelsScreen extends StatefulWidget {
   const ChannelsScreen({super.key});
+
+  @override
+  State<ChannelsScreen> createState() => _ChannelsScreenState();
+}
+
+class _ChannelsScreenState extends State<ChannelsScreen> {
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+  bool _isSearching = false;
 
   @override
   Widget build(BuildContext context) {
@@ -20,13 +30,39 @@ class ChannelsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: scaffoldColor,
       appBar: AppBar(
-        title: const Text('Updates', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: _isSearching 
+          ? TextField(
+              controller: _searchController,
+              autofocus: true,
+              style: TextStyle(color: themeProvider.getColor('appBarText')),
+              decoration: const InputDecoration(hintText: 'Search channels...', border: InputBorder.none, hintStyle: TextStyle(color: Colors.white60)),
+              onChanged: (v) => setState(() => _searchQuery = v.toLowerCase()),
+            )
+          : const Text('Updates', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: themeProvider.getColor('appBar'),
         foregroundColor: themeProvider.getColor('appBarText'),
         actions: [
-          IconButton(icon: const Icon(Icons.camera_alt_outlined), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.search), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.more_vert), onPressed: () {}),
+          IconButton(
+            icon: Icon(_isSearching ? Icons.close : Icons.search), 
+            onPressed: () {
+              setState(() {
+                _isSearching = !_isSearching;
+                if (!_isSearching) {
+                  _searchQuery = '';
+                  _searchController.clear();
+                }
+              });
+            },
+          ),
+          PopupMenuButton<String>(
+            onSelected: (val) {
+               if (val == 'elite') _showTitanEliteInfo(context, themeProvider);
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(value: 'settings', child: Text('Channel Settings')),
+              const PopupMenuItem(value: 'elite', child: Text('Titan Elite Status')),
+            ],
+          ),
         ],
       ),
       body: SingleChildScrollView(
@@ -35,28 +71,17 @@ class ChannelsScreen extends StatelessWidget {
           children: [
             _buildTitanEliteSection(context, themeProvider),
             const Divider(height: 1),
+            _buildEliteAccessCard(context, themeProvider),
+            const Divider(height: 1),
             _buildChannelsSection(context, themeProvider),
           ],
         ),
       ),
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          FloatingActionButton(
-            heroTag: 'create-channel',
-            onPressed: () => _showCreateChannelDialog(context, themeProvider),
-            backgroundColor: themeProvider.getColor('primary'),
-            mini: true,
-            child: const Icon(Icons.edit, color: Colors.white),
-          ),
-          const SizedBox(height: 16),
-          FloatingActionButton(
-            heroTag: 'camera',
-            onPressed: () {},
-            backgroundColor: themeProvider.getColor('primary'),
-            child: const Icon(Icons.camera_alt, color: Colors.white),
-          ),
-        ],
+      floatingActionButton: FloatingActionButton(
+        heroTag: 'create-channel',
+        onPressed: () => _showCreateChannelDialog(context, themeProvider),
+        backgroundColor: themeProvider.getColor('primary'),
+        child: const Icon(Icons.edit, color: Colors.white),
       ),
     );
   }
@@ -197,6 +222,8 @@ class ChannelsScreen extends StatelessWidget {
               itemBuilder: (context, index) {
                 final data = channels[index].data() as Map<String, dynamic>;
                 final name = data['name'] ?? 'Channel';
+                if (_searchQuery.isNotEmpty && !name.toLowerCase().contains(_searchQuery)) return const SizedBox.shrink();
+                
                 final followersCount = data['followersCount'] ?? 0;
                 final icon = data['iconUrl'];
                 final channelId = channels[index].id;
@@ -250,6 +277,114 @@ class ChannelsScreen extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Widget _buildEliteAccessCard(BuildContext context, ScreenThemeProvider theme) {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser?.uid).snapshots(),
+      builder: (context, snapshot) {
+        final data = snapshot.data?.data() as Map<String, dynamic>? ?? {};
+        final bool isElite = data['isElite'] ?? false;
+
+        if (isElite) {
+          return ListTile(
+            leading: const CircleAvatar(backgroundColor: Colors.amber, child: Icon(Icons.star, color: Colors.white)),
+            title: const Text('Titan Elite Status Active', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            subtitle: const Text('You have access to exclusive channels.', style: TextStyle(fontSize: 11)),
+            trailing: const Icon(Icons.verified, color: Colors.blue, size: 18),
+            onTap: () => _showTitanEliteInfo(context, theme),
+          );
+        }
+
+        return Container(
+          margin: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(colors: [Color(0xFF1E1E1E), Color(0xFF2C2C2E)]),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: Colors.amber.withOpacity(0.3)),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.workspace_premium, color: Colors.amber, size: 30),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text('Unlock Titan Elite', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        Text('Join premium paid channels for business & networking.', style: TextStyle(color: Colors.grey, fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: () => _payForElite(context, theme),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.amber.shade800,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 40),
+                ),
+                child: const Text('JOIN ELITE - ₦1,000', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      }
+    );
+  }
+
+  void _showTitanEliteInfo(BuildContext context, ScreenThemeProvider theme) {
+     showModalBottomSheet(
+       context: context,
+       backgroundColor: theme.getColor('card'),
+       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+       builder: (context) => Padding(
+         padding: const EdgeInsets.all(24.0),
+         child: Column(
+           mainAxisSize: MainAxisSize.min,
+           children: [
+             const Icon(Icons.workspace_premium, color: Colors.amber, size: 60),
+             const SizedBox(height: 16),
+             Text('Titan Elite Community', style: TextStyle(color: theme.getColor('text'), fontSize: 20, fontWeight: FontWeight.bold)),
+             const SizedBox(height: 8),
+             const Text('Exclusive access to high-value networks and business insights.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+             const SizedBox(height: 24),
+             const ListTile(leading: Icon(Icons.check, color: Colors.green), title: Text('Verified Badge')),
+             const ListTile(leading: Icon(Icons.check, color: Colors.green), title: Text('Business Advisory')),
+             const ListTile(leading: Icon(Icons.check, color: Colors.green), title: Text('Premium Marketplace Listing')),
+           ],
+         ),
+       ),
+     );
+  }
+
+  Future<void> _payForElite(BuildContext context, ScreenThemeProvider theme) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    
+    final email = user.email ?? '${user.phoneNumber?.replaceAll('+', '')}@titan-ajo.com';
+    final paystack = PaystackService();
+    
+    showDialog(context: context, barrierDismissible: false, builder: (c) => const Center(child: CircularProgressIndicator()));
+    
+    final response = await paystack.checkout(
+      context: context,
+      email: email,
+      amount: 1000.0,
+      reference: 'elite_${user.uid}_${DateTime.now().millisecondsSinceEpoch}',
+    );
+
+    if (context.mounted) Navigator.pop(context);
+
+    if (response != null && response['status'] == true) {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({'isElite': true});
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Welcome to Titan Elite!')));
+    }
   }
 
   void _showCreateChannelDialog(BuildContext context, ScreenThemeProvider themeProvider) {

@@ -1,0 +1,79 @@
+TITAN CHATAPP - PERSONAL AJO SAVINGS IMPLEMENTATION PLAN
+
+GOAL: Implement a robust, secure, and transparent personal savings system within the Ajo Hub, allowing users to save towards targets independently of groups.
+
+1. DATA MODEL & CORE STRUCTURE (COMPLETED)
+   - Created 'PersonalSavings' class in models.dart.
+   - Fields: targetAmount, currentBalance, durationMonths, frequency, nextOfKin, tier, points, isLocked.
+   - Integrated with Firestore 'personal_savings' collection.
+
+2. DYNAMIC ACCOUNT GENERATION (COMPLETED)
+   - Integrated 'PaystackService' to generate unique NUBAN accounts for each savings circle.
+   - Bank: Wema Bank (Titan Partner).
+   - Logic: Automatic generation upon circle creation.
+
+3. TARGET & WITHDRAWAL LOGIC (COMPLETED)
+   - Rule 1: Withdrawal locked until 'targetAmount' is reached OR 'targetDate' (duration) is met.
+   - Dashboard shows a visual lock icon when active.
+
+4. USER DASHBOARD & MANAGEMENT (COMPLETED)
+   - Individual page for each savings circle.
+   - Biometric lock implemented via SecurityService before opening sensitive dashboards.
+   - Full control for the user to manage their specific goal.
+
+5. CREATION WORKFLOW (COMPLETED)
+   - Form includes: Savings Name, Target Amount, Duration (Months), Frequency, and Next of Kin.
+   - Integrated Paystack DVA initialization during the creation process.
+
+6. RULE MODIFICATION & DELETION (COMPLETED)
+   - Deletion Logic: Only allowed once target/duration is met AND balance is zero.
+   - Modification Logic: Admin/Owner can only alter rules (frequency/sequence) once they reach the 50% milestone.
+
+7. VERIFICATION & SIGNUP FEE (₦500) (IN PROGRESS)
+   - UI added to Personal Dashboard.
+   - Logic: ₦500 payment required to activate 'Tier 2' and enable withdrawal options.
+   - Backend: Funds directed to the ChatApp owner's Paystack sub-account.
+
+8. NEXT OF KIN SECURITY (COMPLETED)
+   - Field added to creation form.
+   - Displayed in dashboard for emergency verification purposes.
+
+9. TRANSACTION HISTORY (COMPLETED)
+   - Sub-collection 'transactions' added under each personal saving doc.
+   - Tracks all Paystack inflows and internal transfers.
+
+10. BVN VERIFICATION SYSTEM (COMPLETED)
+    - Dialog implemented in Ajo Hub.
+    - Logic: 11-digit BVN check to upgrade from Starter to Verified (Tier 2).
+
+11. LOYALTY & BONUSES (IN PROGRESS)
+    - Logic: Add +50 points and ₦500 bonus upon successful circle completion.
+
+12. TIER LEVELS & LADDER (COMPLETED)
+    - Tier 1: Starter (New user).
+    - Tier 2: Bronze (BVN + ₦500 Verified).
+    - Tier 3: Silver (First circle completed).
+    - Tier 4: Gold (Active contribution history).
+
+13. TRUST POINTS SYSTEM (COMPLETED)
+    - Base: 150 PTS.
+    - Penalty: Missing a payment resets points to 0. Late payment removes 10 points.
+    - Growth: On-time payments add +5 points.
+
+14. HUB UI OVERHAUL (COMPLETED)
+    - Dark OLED Theme.
+    - Expected Returns card (Green Gradient).
+    - Trust Status Progress Bar.
+    - Quick Action Icons: New Circle, Import Ajo, Find Ajo.
+
+15. BANK CARD LINKING (PLANNED)
+    - Future integration for Paystack Recurring Charges (Direct Debit).
+
+---
+TESTING INSTRUCTIONS:
+1. Open Ajo Hub. Verify the screenshot-accurate UI.
+2. Click 'Setup Personal Savings Circle'.
+3. Create a goal (e.g., 'Holiday Fund') with ₦50,000 target.
+4. Verify Wema Account generation in the dashboard.
+5. Try to withdraw early - verify it is LOCKED.
+6. Pay ₦500 Verification fee and verify Tier upgrade.

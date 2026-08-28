@@ -2,11 +2,14 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 
 class AIService {
   // ⚠️ Replace with your actual Gemini API Key
-  static const String _apiKey = 'YOUR_GEMINI_API_KEY';
+  static const String _defaultApiKey = 'YOUR_GEMINI_API_KEY';
   
   final GenerativeModel _model;
 
-  AIService() : _model = GenerativeModel(model: 'gemini-1.5-flash', apiKey: _apiKey);
+  AIService({String? apiKey}) : _model = GenerativeModel(
+    model: 'gemini-1.5-flash', 
+    apiKey: apiKey ?? _defaultApiKey
+  );
 
   Future<String> summarizeChat(List<String> messages) async {
     if (messages.isEmpty) return "No messages to summarize.";

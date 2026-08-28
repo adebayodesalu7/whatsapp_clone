@@ -103,8 +103,10 @@ class _AjoDashboardScreenState extends State<AjoDashboardScreen> {
                       onSelected: (value) {
                         if (value == 'delete') _confirmDeleteGroup(group);
                         else if (value == 'edit') _editRules(group, themeProvider);
+                        else if (value == 'requests') _showJoinRequests(group, themeProvider);
                       },
                       itemBuilder: (context) => [
+                        const PopupMenuItem(value: 'requests', child: Text('Join Requests')),
                         const PopupMenuItem(value: 'edit', child: Text('Edit Rules & Targets')),
                         const PopupMenuItem(value: 'delete', child: Text('Delete Ajo Group', style: TextStyle(color: Colors.red))),
                       ],
@@ -307,20 +309,32 @@ class _AjoDashboardScreenState extends State<AjoDashboardScreen> {
                       ),
                     ),
                     if (group.members.isNotEmpty && group.members[group.currentTurnIndex % group.members.length] == _currentUserId && currentPaid == membersCount)
-                      SizedBox(
-                        height: 55,
-                        child: ElevatedButton(
-                          onPressed: () => _handleWithdrawal(group, themeProvider),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green.shade600,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 24),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                            elevation: 4,
+                      Builder(builder: (context) {
+                        final now = DateTime.now();
+                        final expectedEndDate = group.createdAt.add(Duration(days: group.frequencyDays * group.totalCycles));
+                        final bool isDurationMet = now.isAfter(expectedEndDate);
+
+                        return SizedBox(
+                          height: 55,
+                          child: ElevatedButton(
+                            onPressed: isDurationMet 
+                              ? () => _handleWithdrawal(group, themeProvider)
+                              : () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Withdrawal locked until cycle duration is complete (${DateFormat('MMM dd, yyyy').format(expectedEndDate)})')),
+                                  );
+                                },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: isDurationMet ? Colors.green.shade600 : Colors.grey,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 24),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                              elevation: 4,
+                            ),
+                            child: Text(isDurationMet ? 'WITHDRAW POOL' : 'LOCKED (Cycle in Progress)'),
                           ),
-                          child: const Text('WITHDRAW POOL', style: TextStyle(fontWeight: FontWeight.bold)),
-                        ),
-                      )
+                        );
+                      })
                     else
                       SizedBox(
                         height: 55,
@@ -832,5 +846,71 @@ class _AjoDashboardScreenState extends State<AjoDashboardScreen> {
         ],
       ),
     );
+  }
+
+  void _showJoinRequests(AjoGroup group, ScreenThemeProvider theme) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: theme.getColor('card'),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Join Requests', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: theme.getColor('text'))),
+            const SizedBox(height: 16),
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: _firestore.collection('ajo_groups').doc(group.id).collection('join_requests').snapshots(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                  final docs = snapshot.data!.docs;
+                  if (docs.isEmpty) return const Center(child: Text('No pending requests'));
+
+                  return ListView.builder(
+                    itemCount: docs.length,
+                    itemBuilder: (context, index) {
+                      final req = docs[index].data() as Map<String, dynamic>;
+                      final userId = req['userId'];
+                      final name = req['userName'] ?? 'User';
+                      final points = req['trustPoints'] ?? 0;
+
+                      return ListTile(
+                        leading: CircleAvatar(child: Text(name[0])),
+                        title: Text(name),
+                        subtitle: Text('Trust Score: $points PTS'),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.check_circle, color: Colors.green),
+                              onPressed: () => _acceptJoinRequest(group.id, docs[index].id, userId),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.cancel, color: Colors.red),
+                              onPressed: () => _firestore.collection('ajo_groups').doc(group.id).collection('join_requests').doc(docs[index].id).delete(),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _acceptJoinRequest(String groupId, String requestId, String userId) async {
+    await _firestore.collection('ajo_groups').doc(groupId).update({
+      'members': FieldValue.arrayUnion([userId]),
+      'payoutStatus.$userId': false,
+    });
+    await _firestore.collection('ajo_groups').doc(groupId).collection('join_requests').doc(requestId).delete();
   }
 }

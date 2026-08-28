@@ -1,10 +1,6 @@
-import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:provider/provider.dart';
-import 'package:whatsapp_clone/providers/screen_theme_provider.dart';
-import 'package:whatsapp_clone/services/chat_service.dart';
-import 'package:whatsapp_clone/widgets/avatar.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:intl/intl.dart';
 
 class ChannelChatScreen extends StatefulWidget {
   final String channelId;
@@ -130,42 +126,118 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
   }
 
   Widget _buildChannelMessage(Map<String, dynamic> data, String messageId, ScreenThemeProvider theme) {
+    final Map<String, dynamic> reactions = data['reactions'] ?? {};
+    final timestamp = (data['timestamp'] as Timestamp?)?.toDate();
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: theme.getColor('card'),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 2)],
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(data['message'] ?? '', style: TextStyle(color: theme.getColor('text'), fontSize: 15)),
-          const SizedBox(height: 4),
+          MarkdownBody(
+            data: data['message'] ?? '',
+            styleSheet: MarkdownStyleSheet(
+              p: TextStyle(color: theme.getColor('text'), fontSize: 15),
+              strong: const TextStyle(fontWeight: FontWeight.bold),
+              em: const TextStyle(fontStyle: FontStyle.italic),
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (reactions.isNotEmpty)
+            Wrap(
+              spacing: 8,
+              children: reactions.entries.map((e) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: theme.getColor('primary').withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text('${e.key} ${e.value}', style: const TextStyle(fontSize: 12)),
+                );
+              }).toList(),
+            ),
+          const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Broadcast', style: TextStyle(fontSize: 10, color: Colors.grey.shade500)),
-              if (widget.isAdmin) ...[
-                IconButton(
-                  icon: const Icon(Icons.edit_outlined, size: 16, color: Colors.blue),
-                  onPressed: () => _showEditMessageDialog(messageId, data['message'] ?? '', theme),
-                  constraints: const BoxConstraints(),
-                  padding: const EdgeInsets.only(right: 8),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline, size: 16, color: Colors.red),
-                  onPressed: () => _chatService.deleteChannelMessage(widget.channelId, messageId),
-                  constraints: const BoxConstraints(),
-                  padding: EdgeInsets.zero,
-                ),
-              ],
+              Text(
+                timestamp != null ? DateFormat('HH:mm').format(timestamp) : 'Broadcast',
+                style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+              ),
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.add_reaction_outlined, size: 18, color: Colors.grey),
+                    onPressed: () => _showReactionPicker(messageId, reactions),
+                    constraints: const BoxConstraints(),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  if (widget.isAdmin) ...[
+                    IconButton(
+                      icon: const Icon(Icons.edit_outlined, size: 16, color: Colors.blue),
+                      onPressed: () => _showEditMessageDialog(messageId, data['message'] ?? '', theme),
+                      constraints: const BoxConstraints(),
+                      padding: const EdgeInsets.only(right: 8),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 16, color: Colors.red),
+                      onPressed: () => _chatService.deleteChannelMessage(widget.channelId, messageId),
+                      constraints: const BoxConstraints(),
+                      padding: EdgeInsets.zero,
+                    ),
+                  ],
+                ],
+              ),
             ],
           ),
         ],
       ),
     );
+  }
+
+  void _showReactionPicker(String messageId, Map<String, dynamic> currentReactions) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: 100,
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: ['👍', '❤️', '😂', '😮', '😢', '🙏'].map((emoji) {
+            return InkWell(
+              onTap: () {
+                _addReaction(messageId, emoji, currentReactions);
+                Navigator.pop(context);
+              },
+              child: Text(emoji, style: const TextStyle(fontSize: 30)),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addReaction(String messageId, String emoji, Map<String, dynamic> currentReactions) async {
+    final Map<String, dynamic> updated = Map<String, dynamic>.from(currentReactions);
+    updated[emoji] = (updated[emoji] ?? 0) + 1;
+    
+    await FirebaseFirestore.instance
+        .collection('channels')
+        .doc(widget.channelId)
+        .collection('messages')
+        .doc(messageId)
+        .update({'reactions': updated});
   }
 
   void _showEditMessageDialog(String messageId, String currentText, ScreenThemeProvider theme) {

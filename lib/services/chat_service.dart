@@ -360,11 +360,13 @@ class ChatService {
      if (currentUser == null) return;
      if (follow) {
        await _firestore.collection('channels').doc(channelId).update({
-         'followers': FieldValue.arrayUnion([currentUser.uid])
+         'followers': FieldValue.arrayUnion([currentUser.uid]),
+         'followersCount': FieldValue.increment(1)
        });
      } else {
        await _firestore.collection('channels').doc(channelId).update({
-         'followers': FieldValue.arrayRemove([currentUser.uid])
+         'followers': FieldValue.arrayRemove([currentUser.uid]),
+         'followersCount': FieldValue.increment(-1)
        });
      }
   }

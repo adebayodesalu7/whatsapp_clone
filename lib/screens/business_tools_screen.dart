@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/screen_theme_provider.dart';
 import '../services/business_service.dart';
 import '../services/ai_service.dart';
@@ -275,15 +276,61 @@ class _AIAdvisorTabState extends State<AIAdvisorTab> {
   final TextEditingController _queryController = TextEditingController();
   String _advice = "Ask me anything about growing your business in Nigeria!";
   bool _isLoading = false;
+  String? _customApiKey;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadApiKey();
+  }
+
+  Future<void> _loadApiKey() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _customApiKey = prefs.getString('custom_gemini_api_key');
+    });
+  }
 
   void _getAdvice() async {
     if (_queryController.text.isEmpty) return;
+    
+    if (_customApiKey == null || _customApiKey!.isEmpty) {
+      _showApiKeyDialog();
+      return;
+    }
+
     setState(() => _isLoading = true);
-    final advice = await AIService().getBusinessAdvice(_queryController.text);
+    final advice = await AIService(apiKey: _customApiKey).getBusinessAdvice(_queryController.text);
     setState(() {
       _advice = advice;
       _isLoading = false;
     });
+  }
+
+  void _showApiKeyDialog() {
+    final controller = TextEditingController(text: _customApiKey);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Enter Gemini API Key'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(hintText: 'Paste your API key here'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('CANCEL')),
+          ElevatedButton(
+            onPressed: () async {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('custom_gemini_api_key', controller.text.trim());
+              setState(() => _customApiKey = controller.text.trim());
+              Navigator.pop(context);
+            },
+            child: const Text('SAVE'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -293,25 +340,36 @@ class _AIAdvisorTabState extends State<AIAdvisorTab> {
       padding: const EdgeInsets.all(16.0),
       child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: Colors.blue.withOpacity(0.3)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.psychology, color: Colors.blue, size: 30),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'AI-powered business advice for African vendors.',
-                    style: TextStyle(color: theme.getColor('text'), fontWeight: FontWeight.w500),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.psychology, color: Colors.blue, size: 30),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'AI-powered business advice for African vendors.',
+                          style: TextStyle(color: theme.getColor('text'), fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.settings, color: Colors.grey),
+                onPressed: _showApiKeyDialog,
+              ),
+            ],
           ),
           const SizedBox(height: 20),
           Expanded(

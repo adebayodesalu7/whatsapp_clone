@@ -9,6 +9,7 @@ build/
 
 # Android
 .gradle/
+.gradle_temp/
 .gradle_home/
 android/.gradle_home/
 local.properties

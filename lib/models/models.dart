@@ -297,6 +297,9 @@ class AjoGroup {
   final String? accountNumber;
   final String? accountName;
   final String? rules;
+  final bool isPublic;
+  final String? location;
+  final List<String> interests;
 
   AjoGroup({
     required this.id,
@@ -317,6 +320,9 @@ class AjoGroup {
     this.accountNumber,
     this.accountName,
     this.rules,
+    this.isPublic = false,
+    this.location,
+    this.interests = const [],
   });
 
   factory AjoGroup.fromMap(Map<String, dynamic> map, String id) {
@@ -339,6 +345,9 @@ class AjoGroup {
       accountNumber: map['accountNumber'],
       accountName: map['accountName'],
       rules: map['rules'],
+      isPublic: map['isPublic'] ?? false,
+      location: map['location'],
+      interests: List<String>.from(map['interests'] ?? []),
     );
   }
 
@@ -361,6 +370,9 @@ class AjoGroup {
       'accountNumber': accountNumber,
       'accountName': accountName,
       'rules': rules,
+      'isPublic': isPublic,
+      'location': location,
+      'interests': interests,
     };
   }
 }
