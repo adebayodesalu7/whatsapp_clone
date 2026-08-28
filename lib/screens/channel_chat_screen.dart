@@ -51,9 +51,11 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
         final channelData = channelSnap.data?.data() as Map<String, dynamic>? ?? {};
         final channelName = channelData['name'] ?? widget.channelName;
         final channelIcon = channelData['iconUrl'] ?? widget.iconUrl;
+        
         final currentUser = FirebaseAuth.instance.currentUser;
         final followers = List<String>.from(channelData['followers'] ?? []);
         final bool isFollowing = currentUser != null && followers.contains(currentUser.uid);
+        // followers or admins can react
         final bool canInteract = widget.isAdmin || isFollowing;
 
         return Scaffold(
@@ -151,6 +153,17 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
                     ],
                   ),
                 )
+              else if (!isFollowing)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  color: themeProvider.getColor('primary').withOpacity(0.1),
+                  child: Text(
+                    'Follow this channel to react to posts.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: themeProvider.getColor('primary'), fontWeight: FontWeight.bold),
+                  ),
+                )
               else
                 Container(
                   width: double.infinity,
@@ -172,6 +185,7 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
   Widget _buildChannelMessage(Map<String, dynamic> data, String messageId, ScreenThemeProvider theme, bool canInteract) {
     final Map<String, dynamic> reactions = data['reactions'] ?? {};
     final timestamp = (data['timestamp'] as Timestamp?)?.toDate();
+    final String currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -196,26 +210,48 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
           if (reactions.isNotEmpty)
             Wrap(
               spacing: 8,
+              runSpacing: 8,
               children: reactions.entries.map((e) {
-                final Map<String, dynamic> userEmojiMap = e.value is Map ? Map<String, dynamic>.from(e.value) : {};
-                final int count = userEmojiMap.length;
-                final bool hasReacted = userEmojiMap.containsKey(FirebaseAuth.instance.currentUser?.uid);
+                final dynamic val = e.value;
+                int count = 0;
+                bool hasReacted = false;
+
+                if (val is Map) {
+                  count = val.length;
+                  hasReacted = val.containsKey(currentUid);
+                } else if (val is int) {
+                  count = val;
+                }
 
                 return GestureDetector(
-                  onTap: canInteract ? () => _toggleReaction(messageId, e.key, reactions) : null,
+                  onTap: canInteract ? () => _toggleReaction(messageId, e.key) : null,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       color: hasReacted 
                         ? theme.getColor('primary').withOpacity(0.2) 
                         : theme.getColor('primary').withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(15),
                       border: Border.all(
-                        color: hasReacted ? theme.getColor('primary') : Colors.transparent,
+                        color: hasReacted ? theme.getColor('primary') : theme.getColor('primary').withOpacity(0.1),
                         width: 1,
                       ),
                     ),
-                    child: Text('${e.key} $count', style: TextStyle(fontSize: 12, fontWeight: hasReacted ? FontWeight.bold : FontWeight.normal)),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(e.key, style: const TextStyle(fontSize: 14)),
+                        const SizedBox(width: 4),
+                        Text(
+                          count.toString(), 
+                          style: TextStyle(
+                            fontSize: 12, 
+                            fontWeight: hasReacted ? FontWeight.bold : FontWeight.normal,
+                            color: theme.getColor('text'),
+                          )
+                        ),
+                      ],
+                    ),
                   ),
                 );
               }).toList(),
@@ -233,7 +269,7 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
                   if (canInteract)
                     IconButton(
                       icon: const Icon(Icons.add_reaction_outlined, size: 18, color: Colors.grey),
-                      onPressed: () => _showReactionPicker(messageId, reactions),
+                      onPressed: () => _showReactionPicker(messageId),
                       constraints: const BoxConstraints(),
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                     ),
@@ -260,7 +296,7 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
     );
   }
 
-  void _showReactionPicker(String messageId, Map<String, dynamic> currentReactions) {
+  void _showReactionPicker(String messageId) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -275,7 +311,7 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
           children: ['👍', '❤️', '😂', '😮', '😢', '🙏'].map((emoji) {
             return InkWell(
               onTap: () {
-                _toggleReaction(messageId, emoji, currentReactions);
+                _toggleReaction(messageId, emoji);
                 Navigator.pop(context);
               },
               child: Text(emoji, style: const TextStyle(fontSize: 30)),
@@ -286,14 +322,21 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
     );
   }
 
-  Future<void> _toggleReaction(String messageId, String emoji, Map<String, dynamic> currentReactions) async {
+  Future<void> _toggleReaction(String messageId, String emoji) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
-    final Map<String, dynamic> updated = Map<String, dynamic>.from(currentReactions);
+    final docRef = FirebaseFirestore.instance
+        .collection('channels')
+        .doc(widget.channelId)
+        .collection('messages')
+        .doc(messageId);
     
-    // We'll use a structure of { emoji: { uid: true } }
-    // This makes it easy to handle migration and prevents duplicate reactions
+    final doc = await docRef.get();
+    if (!doc.exists) return;
+
+    final Map<String, dynamic> reactions = doc.data()?['reactions'] ?? {};
+    final Map<String, dynamic> updated = Map<String, dynamic>.from(reactions);
     
     Map<String, dynamic> emojiMap = {};
     var existing = updated[emoji];
@@ -301,18 +344,18 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
     if (existing is Map) {
       emojiMap = Map<String, dynamic>.from(existing);
     } else if (existing is List) {
-      // Migrate from List to Map
       for (var id in existing) {
         emojiMap[id.toString()] = true;
       }
     } else if (existing is int) {
-      // Migrate from int (cannot know UIDs, so start fresh or ignore)
+      // Re-initialize for new system
       emojiMap = {};
     }
 
     if (emojiMap.containsKey(uid)) {
       emojiMap.remove(uid);
     } else {
+      // Logic: User can only have ONE type of reaction per message (WhatsApp style)
       // Remove this user from any OTHER emoji reactions on this message
       updated.forEach((key, value) {
         if (value is Map) {
@@ -326,27 +369,21 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
       emojiMap[uid] = true;
     }
 
-    // Update the map for this emoji
     if (emojiMap.isEmpty) {
       updated.remove(emoji);
     } else {
       updated[emoji] = emojiMap;
     }
 
-    // Clean up empty reaction entries
-    final Map<String, dynamic> finalUpdated = {};
+    // Clean up all entries to ensure consistency
+    final Map<String, dynamic> finalCleaned = {};
     updated.forEach((key, value) {
-       if (value is Map && value.isNotEmpty) {
-         finalUpdated[key] = value;
-       }
+      if (value is Map && value.isNotEmpty) {
+        finalCleaned[key] = value;
+      }
     });
-    
-    await FirebaseFirestore.instance
-        .collection('channels')
-        .doc(widget.channelId)
-        .collection('messages')
-        .doc(messageId)
-        .update({'reactions': finalUpdated});
+
+    await docRef.update({'reactions': finalCleaned});
   }
 
   Widget _buildFormattingToolbar({TextEditingController? controller}) {
@@ -401,63 +438,63 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
       isScrollControlled: true,
       backgroundColor: theme.getColor('card'),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
-      builder: (context) => Padding(
+      builder: (context) => Container(
         padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Edit Broadcast', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: theme.getColor('text'))),
-                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
-              ],
-            ),
-            const SizedBox(height: 10),
-            _buildFormattingToolbar(controller: controller),
-            const SizedBox(height: 10),
-            Container(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.35,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Edit Broadcast', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: theme.getColor('text'))),
+                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                ],
               ),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(15),
-                color: Colors.black.withOpacity(0.05),
-              ),
-              child: TextField(
-                controller: controller,
-                style: TextStyle(color: theme.getColor('text'), fontSize: 15),
-                maxLines: null,
-                keyboardType: TextInputType.multiline,
-                decoration: const InputDecoration(
-                  contentPadding: EdgeInsets.all(16),
-                  border: InputBorder.none,
-                  hintText: 'Enter message...',
+              const SizedBox(height: 10),
+              _buildFormattingToolbar(controller: controller),
+              const SizedBox(height: 10),
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(15),
+                  color: Colors.black.withOpacity(0.05),
+                ),
+                child: TextField(
+                  controller: controller,
+                  style: TextStyle(color: theme.getColor('text'), fontSize: 15),
+                  maxLines: 10,
+                  minLines: 3,
+                  keyboardType: TextInputType.multiline,
+                  decoration: const InputDecoration(
+                    contentPadding: EdgeInsets.all(16),
+                    border: InputBorder.none,
+                    hintText: 'Enter message...',
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () async {
-                if (controller.text.trim().isNotEmpty) {
-                  await FirebaseFirestore.instance
-                      .collection('channels')
-                      .doc(widget.channelId)
-                      .collection('messages')
-                      .doc(messageId)
-                      .update({'message': controller.text.trim()});
-                  if (mounted) Navigator.pop(context);
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: theme.getColor('primary'),
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () async {
+                  if (controller.text.trim().isNotEmpty) {
+                    await FirebaseFirestore.instance
+                        .collection('channels')
+                        .doc(widget.channelId)
+                        .collection('messages')
+                        .doc(messageId)
+                        .update({'message': controller.text.trim()});
+                    if (mounted) Navigator.pop(context);
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: theme.getColor('primary'),
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                ),
+                child: const Text('SAVE CHANGES', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
-              child: const Text('SAVE CHANGES', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
