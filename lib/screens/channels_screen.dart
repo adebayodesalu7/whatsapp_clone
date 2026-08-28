@@ -8,6 +8,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:whatsapp_clone/screens/channel_chat_screen.dart';
 import 'package:whatsapp_clone/screens/community_detail_screen.dart';
 import 'package:whatsapp_clone/services/paystack_service.dart';
+import 'package:whatsapp_clone/services/cloudinary_service.dart';
+import 'package:image_picker/image_picker.dart';
 
 class ChannelsScreen extends StatefulWidget {
   const ChannelsScreen({super.key});
@@ -94,20 +96,20 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 'Titan Elite Communities',
-                style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: -0.4),
+                style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w900, letterSpacing: -0.4),
               ),
-              Icon(Icons.hub_outlined, color: themeProvider.getColor('primary'), size: 16),
+              Icon(Icons.hub_outlined, color: themeProvider.getColor('primary'), size: 14),
             ],
           ),
         ),
         SizedBox(
-          height: 125,
+          height: 110,
           child: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('channels').where('isElite', isEqualTo: true).snapshots(),
             builder: (context, channelsSnap) {
@@ -122,7 +124,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                   if (eliteChannels.isEmpty && communities.isEmpty) {
                     return Center(
                       child: Text("Premium Elite channels appear here.", 
-                        style: TextStyle(fontSize: 12, color: secondaryTextColor.withOpacity(0.5))),
+                        style: TextStyle(fontSize: 10, color: secondaryTextColor.withOpacity(0.5))),
                     );
                   }
                   
@@ -130,13 +132,14 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
 
                   return ListView.builder(
                     scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
                     itemCount: combinedItems.length,
                     itemBuilder: (context, index) {
                       final item = combinedItems[index];
                       final bool isChannel = item.reference.path.startsWith('channels');
                       final data = item.data() as Map<String, dynamic>;
                       final name = data['name'] ?? 'Elite';
+                      final String? iconUrl = data['iconUrl'];
                       
                       return GestureDetector(
                         onTap: () {
@@ -144,19 +147,19 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                             final admins = List<String>.from(data['admins'] ?? []);
                             final bool isAdmin = FirebaseAuth.instance.currentUser != null && 
                                 (admins.contains(FirebaseAuth.instance.currentUser!.uid) || data['createdBy'] == FirebaseAuth.instance.currentUser!.uid);
-                            Navigator.push(context, MaterialPageRoute(builder: (context) => ChannelChatScreen(channelId: item.id, channelName: name, isAdmin: isAdmin)));
+                            Navigator.push(context, MaterialPageRoute(builder: (context) => ChannelChatScreen(channelId: item.id, channelName: name, isAdmin: isAdmin, iconUrl: iconUrl)));
                           } else {
                             Navigator.push(context, MaterialPageRoute(builder: (context) => CommunityDetailScreen(communityId: item.id)));
                           }
                         },
                         child: Container(
-                          width: 100,
-                          margin: const EdgeInsets.only(right: 12, top: 4, bottom: 4),
-                          padding: const EdgeInsets.all(8),
+                          width: 85,
+                          margin: const EdgeInsets.only(right: 8, top: 4, bottom: 4),
+                          padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
                             color: isChannel ? Colors.amber.withOpacity(0.05) : themeProvider.getColor('primary').withOpacity(0.05),
-                            borderRadius: BorderRadius.circular(15),
-                            border: Border.all(color: isChannel ? Colors.amber.withOpacity(0.2) : themeProvider.getColor('primary').withOpacity(0.1)),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: isChannel ? Colors.amber.withOpacity(0.15) : themeProvider.getColor('primary').withOpacity(0.1)),
                           ),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -164,25 +167,25 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                               Stack(
                                 alignment: Alignment.center,
                                 children: [
-                                  Avatar(name: name, size: 55, isTitanElite: true),
+                                  Avatar(name: name, imageUrl: iconUrl, size: 48, isTitanElite: true),
                                   Positioned(
                                     bottom: -2,
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                                       decoration: BoxDecoration(
                                         color: isChannel ? Colors.amber.shade800 : themeProvider.getColor('primary'),
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(color: Colors.black, width: 1),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.black, width: 0.5),
                                       ),
-                                      child: Text(isChannel ? 'ELITE' : 'TITAN', style: const TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.bold)),
+                                      child: Text(isChannel ? 'ELITE' : 'TITAN', style: const TextStyle(color: Colors.white, fontSize: 6, fontWeight: FontWeight.bold)),
                                     ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 6),
                               Text(
                                 name, 
-                                style: TextStyle(color: textColor, fontSize: 11, fontWeight: FontWeight.w900), 
+                                style: TextStyle(color: textColor, fontSize: 10, fontWeight: FontWeight.w800), 
                                 overflow: TextOverflow.ellipsis,
                                 textAlign: TextAlign.center,
                               ),
@@ -198,10 +201,10 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
           ),
         ),
         const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Text(
-            'Titan Elite are interactive hubs for real-time collaboration, networking, and exclusive premium benefits.',
-            style: TextStyle(color: Colors.grey, fontSize: 11),
+            'Titan Elite interactive premium hubs.',
+            style: TextStyle(color: Colors.grey, fontSize: 10),
           ),
         ),
       ],
@@ -216,17 +219,17 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 16, 12, 4),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
           child: Text(
             'Trending Channels',
-            style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.bold),
+            style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.bold),
           ),
         ),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 12, vertical: 2),
           child: Text(
             'Follow channels for updates.',
-            style: TextStyle(color: Colors.grey, fontSize: 10),
+            style: TextStyle(color: Colors.grey, fontSize: 9),
           ),
         ),
         StreamBuilder<QuerySnapshot>(
@@ -258,21 +261,21 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
 
                 return ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                  leading: Avatar(name: name, imageUrl: icon, size: 45),
+                  leading: Avatar(name: name, imageUrl: icon, size: 40),
                   title: Row(
                     children: [
-                      Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: textColor, fontSize: 14)),
+                      Text(name, style: TextStyle(fontWeight: FontWeight.bold, color: textColor, fontSize: 13)),
                       if (isEliteChannel) ...[
                         const SizedBox(width: 4),
-                        const Icon(Icons.stars, color: Colors.amber, size: 14),
+                        const Icon(Icons.stars, color: Colors.amber, size: 12),
                       ],
                       if (isAdmin) ...[
                         const SizedBox(width: 4),
-                        Icon(Icons.verified, color: themeProvider.getColor('primary'), size: 14),
+                        Icon(Icons.verified, color: themeProvider.getColor('primary'), size: 12),
                       ],
                     ],
                   ),
-                  subtitle: Text('$followersCount followers', style: TextStyle(color: secondaryTextColor, fontSize: 11)),
+                  subtitle: Text('$followersCount followers', style: TextStyle(color: secondaryTextColor, fontSize: 10)),
                   trailing: ElevatedButton(
                     onPressed: () {
                       ChatService().toggleFollowChannel(channelId, !isFollowing);
@@ -282,10 +285,10 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                       foregroundColor: isFollowing ? textColor : themeProvider.getColor('primary'),
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      minimumSize: const Size(0, 32),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: const Size(0, 28),
                     ),
-                    child: Text(isFollowing ? 'Following' : 'Follow', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                    child: Text(isFollowing ? 'Following' : 'Follow', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
                   ),
                   onTap: () {
                     Navigator.push(
@@ -295,6 +298,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                           channelId: channelId,
                           channelName: name,
                           isAdmin: isAdmin,
+                          iconUrl: icon,
                         ),
                       ),
                     );
@@ -425,19 +429,44 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
   void _showCreateChannelDialog(BuildContext context, ScreenThemeProvider themeProvider) {
     final nameController = TextEditingController();
     final descController = TextEditingController();
+    String? imageUrl;
     bool isEliteToggle = false;
+    bool isUploading = false;
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
+        builder: (context, setDialogState) => AlertDialog(
           backgroundColor: themeProvider.getColor('card'),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
           title: Text('Create New Channel', style: TextStyle(color: themeProvider.getColor('text'), fontWeight: FontWeight.bold)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                GestureDetector(
+                  onTap: () async {
+                    final picker = ImagePicker();
+                    final image = await picker.pickImage(source: ImageSource.gallery);
+                    if (image != null) {
+                      setDialogState(() => isUploading = true);
+                      final url = await CloudinaryService().uploadImage(image);
+                      setDialogState(() {
+                        imageUrl = url;
+                        isUploading = false;
+                      });
+                    }
+                  },
+                  child: CircleAvatar(
+                    radius: 40,
+                    backgroundColor: themeProvider.getColor('primary').withOpacity(0.1),
+                    backgroundImage: imageUrl != null ? NetworkImage(imageUrl!) : null,
+                    child: isUploading 
+                      ? const CircularProgressIndicator()
+                      : (imageUrl == null ? const Icon(Icons.add_a_photo, color: Colors.blue) : null),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 TextField(
                   controller: nameController,
                   decoration: InputDecoration(
@@ -463,7 +492,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                   title: const Text('Elite Channel', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.amber)),
                   subtitle: const Text('Premium channel for business. Fee: ₦10,000', style: TextStyle(fontSize: 10, color: Colors.grey)),
                   value: isEliteToggle,
-                  onChanged: (val) => setState(() => isEliteToggle = val),
+                  onChanged: (val) => setDialogState(() => isEliteToggle = val),
                   secondary: const Icon(Icons.workspace_premium, color: Colors.amber),
                   contentPadding: EdgeInsets.zero,
                 ),
@@ -473,7 +502,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
             ElevatedButton(
-              onPressed: () async {
+              onPressed: isUploading ? null : () async {
                 if (nameController.text.isNotEmpty && FirebaseAuth.instance.currentUser != null) {
                   final uid = FirebaseAuth.instance.currentUser!.uid;
                   final user = FirebaseAuth.instance.currentUser!;
@@ -505,6 +534,7 @@ class _ChannelsScreenState extends State<ChannelsScreen> {
                   await FirebaseFirestore.instance.collection('channels').add({
                     'name': nameController.text,
                     'description': descController.text,
+                    'iconUrl': imageUrl,
                     'followersCount': 1,
                     'followers': [uid],
                     'admins': [uid],
